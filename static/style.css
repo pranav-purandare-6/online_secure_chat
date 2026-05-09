@@ -196,3 +196,33 @@ button {
   margin-bottom: 4px;
   letter-spacing: 0.3px;
 }
+
+/* MOBILE RESPONSIVENESS */
+@media (max-width: 768px) {
+  body {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+  }
+  
+  .sidebar, .chat-container, .crypto-panel {
+    width: 100%;
+    box-sizing: border-box;
+    height: auto;
+  }
+  
+  .chat-container {
+    height: 60vh; /* Scrollable chat area on mobile */
+    border-top: 1px solid #334155;
+  }
+  
+  .crypto-panel {
+    height: 30vh; /* Smaller area for crypto logs */
+    border-left: none;
+    border-top: 1px solid #334155;
+  }
+  
+  .message {
+    max-width: 85%; /* Give message bubbles more horizontal space */
+  }
+}
