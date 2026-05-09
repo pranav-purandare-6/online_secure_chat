@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Secure Chat</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+<!-- LEFT SIDEBAR -->
+<div class="sidebar">
+
+  <h3 id="formTitle">Login</h3>
+
+  <div id="authSection">
+    <div id="loginForm">
+      <input id="loginUsername" placeholder="Username" autocomplete="username"><br><br>
+      <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password"><br><br>
+      <button onclick="login()">Login</button>
+      <p onclick="showRegister()" style="cursor:pointer; color:#38bdf8;">New user? Register</p>
+    </div>
+
+    <div id="registerForm" style="display:none;">
+      <input id="regUsername" placeholder="Username" autocomplete="username"><br><br>
+      <input id="regPassword" type="password" placeholder="Password" autocomplete="new-password"><br><br>
+      <button onclick="register()">Register</button>
+      <p onclick="showLogin()" style="cursor:pointer; color:#38bdf8;">Already have an account? Login</p>
+    </div>
+  </div>
+
+  <div id="profileSection" style="display:none;">
+    <h4>👤 <span id="profileName"></span></h4>
+    <button onclick="logout()" style="background:red;color:white;">Logout</button>
+  </div>
+
+  <p id="status" style="color:lightgreen;"></p>
+
+  <hr>
+  <div id="usersSection" style="display:none;">
+    <h3>Online Users</h3>
+    <div id="users"></div>
+  </div>
+
+</div>
+
+<!-- CHAT -->
+<div class="chat-container">
+  <div class="chat-header">
+    <span id="chatTitle">Select a user</span>
+    <button onclick="closeChat()" style="float:right; background:red; color:white; border:none; padding:5px; cursor:pointer;">❌</button>
+  </div>
+  <div class="chat-box" id="chat"></div>
+  <div id="typingIndicator" class="typing-indicator"></div>
+  <div class="input-box" id="chatInput" style="display:none;">
+    <input id="message" placeholder="Type a message">
+    <button onclick="send()">Send</button>
+  </div>
+</div>
+
+<!-- ENCRYPTION PANEL -->
+<div class="crypto-panel">
+  <h3>🔐 Encryption Log</h3>
+  <div id="crypto"></div>
+</div>
+
+<!-- Libraries: elliptic.js (ECDH), CryptoJS (AES), Socket.IO -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/elliptic/6.5.7/elliptic.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<script>
+
+// ══════════════════════════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════════════════════════
+var socket      = io(window.location.origin);
+var myUsername  = "";
+var currentUser = "";
+var unread      = {};
+var usersList   = [];
+var loggedIn    = false;
+var pending     = [];
+var broadcastHistory = [];
+
+// ── ECDH state ──
+var ec = new elliptic.ec('p256');
+var myKeyPair    = null;   // ECDH key pair (generated on login)
+var myPublicHex  = "";     // my public key hex
+var peerKeys     = {};     // username -> public key hex (from server)
+var derivedKeys  = {};     // username -> AES key hex (derived via ECDH)
+
+// ══════════════════════════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════════════════════════
+function $id(id) { return document.getElementById(id); }
+function scrollChat() { var c=$id("chat"); c.scrollTop=c.scrollHeight; }
+function escapeHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;")
+          .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ECDH KEY MANAGEMENT
+// ══════════════════════════════════════════════════════════════════════════
+function generateKeyPair() {
+  myKeyPair = ec.genKeyPair();
+  myPublicHex = myKeyPair.getPublic('hex');
+  console.log("[E2EE] Generated ECDH keypair, public:", myPublicHex.substring(0,20)+"...");
+}
+
+function deriveSharedKey(otherPublicHex) {
+  try {
+    var otherKey = ec.keyFromPublic(otherPublicHex, 'hex');
+    var shared = myKeyPair.derive(otherKey.getPublic());
+    var sharedHex = shared.toString(16);
+    while (sharedHex.length < 64) sharedHex = '0' + sharedHex;
+    // SHA-256 of shared secret -> first 32 hex chars (16 bytes) = AES-128 key
+    return CryptoJS.SHA256(sharedHex).toString(CryptoJS.enc.Hex).substring(0, 32);
+  } catch(e) {
+    console.error("[E2EE] Key derivation failed:", e);
+    return null;
+  }
+}
+
+function getOrDeriveKey(username) {
+  if (derivedKeys[username]) return derivedKeys[username];
+  if (!peerKeys[username]) return null;
+  var key = deriveSharedKey(peerKeys[username]);
+  if (key) derivedKeys[username] = key;
+  return key;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  CLIENT-SIDE AES-128-CBC ENCRYPTION (E2EE)
+// ══════════════════════════════════════════════════════════════════════════
+function encryptMsg(plaintext, aesKeyHex) {
+  var key = CryptoJS.enc.Hex.parse(aesKeyHex);
+  var iv  = CryptoJS.lib.WordArray.random(16);
+  var enc = CryptoJS.AES.encrypt(plaintext, key, {
+    iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7
+  });
+  return CryptoJS.enc.Base64.stringify(iv.concat(enc.ciphertext));
+}
+
+function decryptMsg(encBase64, aesKeyHex) {
+  try {
+    var key = CryptoJS.enc.Hex.parse(aesKeyHex);
+    var raw = CryptoJS.enc.Base64.parse(encBase64);
+    var iv  = CryptoJS.lib.WordArray.create(raw.words.slice(0,4), 16);
+    var ct  = CryptoJS.lib.WordArray.create(raw.words.slice(4), raw.sigBytes-16);
+    var dec = CryptoJS.AES.decrypt({ciphertext:ct}, key, {
+      iv:iv, mode:CryptoJS.mode.CBC, padding:CryptoJS.pad.Pkcs7
+    });
+    var result = dec.toString(CryptoJS.enc.Utf8);
+    if (!result) throw new Error("Empty");
+    return result;
+  } catch(e) {
+    console.error("[E2EE] Decrypt failed:", e.message);
+    return null;
+  }
+}
+
+function sha256(msg) {
+  return CryptoJS.SHA256(msg).toString(CryptoJS.enc.Hex);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  FORMS
+// ══════════════════════════════════════════════════════════════════════════
+function showRegister() {
+  $id("loginForm").style.display="none";
+  $id("registerForm").style.display="block";
+  $id("formTitle").innerText="Register";
+}
+function showLogin() {
+  $id("registerForm").style.display="none";
+  $id("loginForm").style.display="block";
+  $id("formTitle").innerText="Login";
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  AUTH
+// ══════════════════════════════════════════════════════════════════════════
+function register() {
+  var u=$id("regUsername").value.trim(), p=$id("regPassword").value;
+  if (!u||!p) { $id("status").innerText="❌ Fill in all fields"; return; }
+  socket.emit('register', {username:u, password:p});
+}
+
+function login() {
+  if (loggedIn) { $id("status").innerText="❌ Already logged in"; return; }
+  var u=$id("loginUsername").value.trim(), p=$id("loginPassword").value;
+  if (!u||!p) { $id("status").innerText="❌ Fill in all fields"; return; }
+  socket.emit('login', {username:u, password:p});
+}
+
+function logout() { location.reload(); }
+
+function closeChat() {
+  currentUser="";
+  $id("chat").innerHTML=""; $id("crypto").innerHTML="";
+  $id("chatTitle").innerText="Select a user";
+  $id("chatInput").style.display="none";
+  $id("typingIndicator").style.opacity="0";
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  AUTH RESPONSE — generate ECDH keys on login
+// ══════════════════════════════════════════════════════════════════════════
+socket.on('auth', function(data) {
+  $id("status").innerText = data.msg;
+  if (data.msg.includes("Registered")) { showLogin(); return; }
+  if (data.msg.includes("Welcome") && data.username) {
+    loggedIn = true;
+    myUsername = data.username;
+    $id("usersSection").style.display = "block";
+    $id("authSection").style.display = "none";
+    $id("profileSection").style.display = "block";
+    $id("profileName").innerText = myUsername;
+
+    // Generate ECDH keypair and send public key to server
+    generateKeyPair();
+    socket.emit('store_public_key', {publicKey: myPublicHex});
+
+    pending.forEach(function(d) { handleReceive(d); });
+    pending = [];
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+//  USERS LIST
+// ══════════════════════════════════════════════════════════════════════════
+socket.on('users', function(users) { usersList=users; renderUsers(); });
+
+function renderUsers() {
+  var div=$id("users"); div.innerHTML="";
+
+  // Broadcast Channel
+  var bc=document.createElement("div");
+  bc.className="user broadcast-user"+(currentUser==="__broadcast__"?" active-user":"");
+  var bcCnt=unread["__broadcast__"]||0;
+  bc.innerHTML='🌐 Broadcast Channel '+(bcCnt?'<span class="badge">'+bcCnt+'</span>':'');
+  bc.onclick=function(){
+    currentUser="__broadcast__"; unread["__broadcast__"]=0;
+    $id("chatTitle").innerText="🌐 Broadcast Channel";
+    $id("chat").innerHTML=""; $id("crypto").innerHTML="";
+    $id("chatInput").style.display="flex";
+    $id("typingIndicator").style.opacity="0";
+    // Fetch all online users' public keys for broadcast encryption
+    socket.emit('get_online_keys');
+    renderUsers();
+    for (var i=0; i<broadcastHistory.length; i++) {
+      showMsg(broadcastHistory[i]); showCrypto(broadcastHistory[i]);
+    }
+    scrollChat();
+  };
+  div.appendChild(bc);
+
+  // Individual users
+  var any=false;
+  usersList.forEach(function(u) {
+    if (u===myUsername) return;
+    any=true;
+    var el=document.createElement("div");
+    el.className="user"+(currentUser===u?" active-user":"");
+    var cnt=unread[u]||0;
+    el.innerHTML='🟢 '+escapeHtml(u)+' '+(cnt?'<span class="badge">'+cnt+'</span>':'');
+    el.onclick=function(){
+      currentUser=u; unread[u]=0;
+      $id("chatTitle").innerText="Chat with "+u;
+      $id("chat").innerHTML=""; $id("crypto").innerHTML="";
+      $id("chatInput").style.display="flex";
+      renderUsers();
+      // Request peer's public key then load history
+      socket.emit('get_public_key', {username: u});
+      socket.emit('load_history', {with: u});
+    };
+    div.appendChild(el);
+  });
+  if (!any) {
+    var p=document.createElement("p");
+    p.style.opacity="0.6"; p.innerText="No other users online";
+    div.appendChild(p);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  PUBLIC KEY RESPONSES
+// ══════════════════════════════════════════════════════════════════════════
+socket.on('public_key', function(data) {
+  if (data.publicKey) {
+    peerKeys[data.username] = data.publicKey;
+    derivedKeys[data.username] = null; // force re-derive
+    var k = getOrDeriveKey(data.username);
+    console.log("[E2EE] Derived shared key with", data.username, k?"OK":"FAIL");
+  }
+});
+
+socket.on('online_keys', function(keys) {
+  for (var user in keys) {
+    peerKeys[user] = keys[user];
+    derivedKeys[user] = null;
+    getOrDeriveKey(user);
+  }
+  console.log("[E2EE] Derived broadcast keys for", Object.keys(keys).length, "users");
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+//  LOAD HISTORY (encrypted payloads — decrypt client-side)
+// ══════════════════════════════════════════════════════════════════════════
+socket.on('chat_history', function(msgs) {
+  $id("chat").innerHTML=""; $id("crypto").innerHTML="";
+  for (var i=0; i<msgs.length; i++) {
+    var msg = msgs[i];
+    var other = msg.from===myUsername ? msg.to : msg.from;
+    var aesKey = getOrDeriveKey(other);
+    if (!aesKey || !msg.encrypted) continue;
+    var decrypted = decryptMsg(msg.encrypted, aesKey);
+    if (decrypted===null) continue;
+    var integrity = sha256(decrypted)===msg.hash;
+    showMsg({from:msg.from, to:msg.to, time:msg.time, decrypted:decrypted, integrity:integrity});
+    showCrypto(msg);
+  }
+  scrollChat();
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+//  SEND (E2EE — encrypt client-side, server never sees plaintext)
+// ══════════════════════════════════════════════════════════════════════════
+function send() {
+  var box=$id("message"), msg=box.value.trim();
+  if (!msg||!currentUser) return;
+
+  if (currentUser==="__broadcast__") {
+    sendBroadcast(msg);
+  } else {
+    var aesKey = getOrDeriveKey(currentUser);
+    if (!aesKey) {
+      $id("status").innerText="⏳ Key exchange pending...";
+      socket.emit('get_public_key', {username: currentUser});
+      return;
+    }
+    var encrypted = encryptMsg(msg, aesKey);
+    var msgHash = sha256(msg);
+    socket.emit('send_message', {to:currentUser, encrypted:encrypted, hash:msgHash});
+  }
+  box.value=""; box.focus();
+}
+
+function sendBroadcast(msg) {
+  // Generate ephemeral AES key for this message
+  var ephemeralKey = CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex);
+  var encrypted = encryptMsg(msg, ephemeralKey);
+  var msgHash = sha256(msg);
+
+  // Wrap ephemeral key for each online user using their ECDH shared secret
+  var wrappedKeys = {};
+  // Include self
+  wrappedKeys[myUsername] = encryptMsg(ephemeralKey, sha256(myPublicHex).substring(0,32));
+
+  for (var user in peerKeys) {
+    var sharedKey = getOrDeriveKey(user);
+    if (sharedKey) {
+      wrappedKeys[user] = encryptMsg(ephemeralKey, sharedKey);
+    }
+  }
+
+  socket.emit('send_group_message', {
+    encrypted: encrypted, hash: msgHash, wrappedKeys: wrappedKeys
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  RECEIVE (personal — E2EE decrypt)
+// ══════════════════════════════════════════════════════════════════════════
+socket.on('receive', function(data) {
+  if (!myUsername) { pending.push(data); return; }
+  handleReceive(data);
+});
+
+function handleReceive(data) {
+  if (!data.encrypted) return;
+  var other = data.from===myUsername ? data.to : data.from;
+  var aesKey = getOrDeriveKey(other);
+
+  if (!aesKey) {
+    // Request key and retry
+    peerKeys[other] = null;
+    socket.emit('get_public_key', {username: other});
+    console.log("[E2EE] Waiting for key from", other);
+    setTimeout(function(){ handleReceive(data); }, 500);
+    return;
+  }
+
+  var decrypted = decryptMsg(data.encrypted, aesKey);
+  if (decrypted===null) return;
+
+  var integrity = sha256(decrypted)===data.hash;
+  var full = {from:data.from, to:data.to, time:data.time, encrypted:data.encrypted, decrypted:decrypted, integrity:integrity};
+  var isMine = data.from===myUsername;
+  var isForMe = data.to===myUsername;
+  if (!isMine && !isForMe) return;
+
+  if (currentUser===other) {
+    showMsg(full); showCrypto(full); scrollChat();
+  } else if (isForMe) {
+    unread[other]=(unread[other]||0)+1; renderUsers();
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  RECEIVE BROADCAST (unwrap ephemeral key, then decrypt)
+// ══════════════════════════════════════════════════════════════════════════
+socket.on('group_receive', function(data) {
+  if (!myUsername) return;
+  if (!data.encrypted || !data.wrappedKeys) return;
+
+  var ephemeralKey = null;
+
+  if (data.from === myUsername) {
+    // Sender: unwrap with own self-key
+    var selfKey = sha256(myPublicHex).substring(0,32);
+    ephemeralKey = decryptMsg(data.wrappedKeys[myUsername], selfKey);
+  } else {
+    // Recipient: unwrap with shared ECDH key
+    var sharedKey = getOrDeriveKey(data.from);
+    if (sharedKey && data.wrappedKeys[myUsername]) {
+      ephemeralKey = decryptMsg(data.wrappedKeys[myUsername], sharedKey);
+    }
+  }
+
+  if (!ephemeralKey) {
+    console.error("[E2EE] Cannot unwrap broadcast key");
+    return;
+  }
+
+  var decrypted = decryptMsg(data.encrypted, ephemeralKey);
+  if (decrypted===null) return;
+
+  var integrity = sha256(decrypted)===data.hash;
+  var full = {from:data.from, to:'__broadcast__', time:data.time, encrypted:data.encrypted, decrypted:decrypted, integrity:integrity, group:true};
+
+  broadcastHistory.push(full);
+
+  if (currentUser==="__broadcast__") {
+    showMsg(full); showCrypto(full); scrollChat();
+  } else {
+    unread["__broadcast__"]=(unread["__broadcast__"]||0)+1; renderUsers();
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+//  TYPING
+// ══════════════════════════════════════════════════════════════════════════
+var tyTimer;
+socket.on('typing', function(data) {
+  if (data.from!==currentUser) return;
+  var el=$id("typingIndicator");
+  el.innerHTML=data.from+' is typing <span class="dots">...</span>';
+  el.style.opacity="1";
+  clearTimeout(tyTimer);
+  tyTimer=setTimeout(function(){ el.style.opacity="0"; },1500);
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════════════════════════════
+function getUserColor(username) {
+  var hash=0;
+  for (var i=0;i<username.length;i++) hash=username.charCodeAt(i)+((hash<<5)-hash);
+  return 'hsl('+Math.abs(hash)%360+', 80%, 65%)';
+}
+
+function showMsg(data) {
+  var div=document.createElement("div");
+  div.className="message "+(data.from===myUsername?"sent":"received");
+  var html='';
+  if (data.group && data.from!==myUsername) {
+    html+='<div class="group-sender-name" style="color:'+getUserColor(data.from)+'">'+escapeHtml(data.from)+'</div>';
+  } else if (data.group) {
+    html+='<div class="group-sender-name" style="color:#22c55e">You</div>';
+  }
+  html+=escapeHtml(data.decrypted);
+  html+='<div class="time">'+data.time+'</div>';
+  html+=(data.integrity
+    ?'<div style="color:lightgreen;font-size:11px;">✔ Verified</div>'
+    :'<div style="color:red;font-size:11px;">⚠ Tampered</div>');
+  div.innerHTML=html;
+  $id("chat").appendChild(div);
+}
+
+function showCrypto(data) {
+  var div=document.createElement("div"); div.className="crypto-box";
+  var target=data.group?'🌐 Broadcast':escapeHtml(data.to);
+  div.innerHTML='<b>'+escapeHtml(data.from)+' → '+target+'</b><br>🔒 '+escapeHtml(data.encrypted);
+  $id("crypto").prepend(div);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  KEYBOARD
+// ══════════════════════════════════════════════════════════════════════════
+$id("message").addEventListener("keydown", function(e){
+  if (e.key==="Enter"){e.preventDefault();send();}
+});
+document.addEventListener("keydown", function(e){
+  if (e.key==="Escape") closeChat();
+});
+$id("message").addEventListener("input", function(e){
+  var v=e.target.value;
+  if (v.length>0) e.target.value=v.charAt(0).toUpperCase()+v.slice(1);
+  if (currentUser && currentUser!=="__broadcast__") socket.emit('typing',{to:currentUser});
+});
+$id("loginPassword").addEventListener("keydown", function(e){
+  if (e.key==="Enter"){e.preventDefault();login();}
+});
+$id("regPassword").addEventListener("keydown", function(e){
+  if (e.key==="Enter"){e.preventDefault();register();}
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+//  CONNECTION STATUS
+// ══════════════════════════════════════════════════════════════════════════
+socket.on('error', function(data) { $id("status").innerText=data.msg; });
+socket.on('connect', function() { console.log("[SOCKET] Connected"); });
+socket.on('disconnect', function() {
+  if (loggedIn) $id("status").innerText="⚠ Disconnected...";
+});
+
+</script>
+</body>
+</html>
