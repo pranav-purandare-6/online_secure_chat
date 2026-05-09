@@ -47,8 +47,9 @@
 <!-- CHAT -->
 <div class="chat-container">
   <div class="chat-header">
+    <button class="back-btn" onclick="closeChat()">⬅</button>
     <span id="chatTitle">Select a user</span>
-    <button onclick="closeChat()" style="float:right; background:red; color:white; border:none; padding:5px; cursor:pointer;">❌</button>
+    <button class="close-btn" onclick="closeChat()" style="float:right; background:red; color:white; border:none; padding:5px; cursor:pointer;">❌</button>
   </div>
   <div class="chat-box" id="chat"></div>
   <div id="typingIndicator" class="typing-indicator"></div>
@@ -202,6 +203,7 @@ function closeChat() {
   $id("chatTitle").innerText="Select a user";
   $id("chatInput").style.display="none";
   $id("typingIndicator").style.opacity="0";
+  document.body.classList.remove("mobile-chat-active");
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -246,6 +248,7 @@ function renderUsers() {
     $id("chat").innerHTML=""; $id("crypto").innerHTML="";
     $id("chatInput").style.display="flex";
     $id("typingIndicator").style.opacity="0";
+    document.body.classList.add("mobile-chat-active");
     // Fetch all online users' public keys for broadcast encryption
     socket.emit('get_online_keys');
     renderUsers();
@@ -270,6 +273,7 @@ function renderUsers() {
       $id("chatTitle").innerText="Chat with "+u;
       $id("chat").innerHTML=""; $id("crypto").innerHTML="";
       $id("chatInput").style.display="flex";
+      document.body.classList.add("mobile-chat-active");
       renderUsers();
       // Request peer's public key then load history
       socket.emit('get_public_key', {username: u});

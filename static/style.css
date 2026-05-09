@@ -197,32 +197,69 @@ button {
   letter-spacing: 0.3px;
 }
 
-/* MOBILE RESPONSIVENESS */
+/* MOBILE RESPONSIVENESS (WhatsApp Style) */
+.back-btn { display: none; }
+.close-btn { display: inline-block; }
+
 @media (max-width: 768px) {
   body {
-    flex-direction: column;
-    height: auto;
-    min-height: 100vh;
+    display: block;
+    height: 100vh;
+    overflow: hidden; /* Prevent body scrolling */
   }
   
-  .sidebar, .chat-container, .crypto-panel {
+  /* DEFAULT STATE: Show Sidebar, Hide Chat */
+  .sidebar {
     width: 100%;
+    height: 100vh;
     box-sizing: border-box;
-    height: auto;
+    display: block;
   }
   
   .chat-container {
-    height: 60vh; /* Scrollable chat area on mobile */
-    border-top: 1px solid #334155;
+    display: none;
+    width: 100%;
+    height: 100vh;
+    box-sizing: border-box;
+    border-top: none;
   }
   
   .crypto-panel {
-    height: 30vh; /* Smaller area for crypto logs */
-    border-left: none;
-    border-top: 1px solid #334155;
+    display: none !important; /* Hide encryption log entirely on mobile for cleaner UI */
+  }
+  
+  /* ACTIVE STATE: Hide Sidebar, Show Chat */
+  body.mobile-chat-active .sidebar {
+    display: none;
+  }
+  
+  body.mobile-chat-active .chat-container {
+    display: flex;
+  }
+  
+  /* HEADER BUTTONS */
+  .back-btn {
+    display: inline-block;
+    background: transparent;
+    color: white;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    margin-right: 15px;
+    padding: 0;
+  }
+  
+  .close-btn {
+    display: none !important;
+  }
+  
+  .chat-header {
+    background: #075e54; /* WhatsApp classic green header */
+    display: flex;
+    align-items: center;
   }
   
   .message {
-    max-width: 85%; /* Give message bubbles more horizontal space */
+    max-width: 85%;
   }
 }
