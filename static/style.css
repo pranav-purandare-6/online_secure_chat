@@ -202,24 +202,29 @@ button {
 .close-btn { display: inline-block; }
 
 @media (max-width: 768px) {
+  html, body {
+    height: 100%;
+    margin: 0;
+  }
   body {
     display: block;
-    height: 100vh;
+    height: 100dvh;
     overflow: hidden; /* Prevent body scrolling */
   }
   
   /* DEFAULT STATE: Show Sidebar, Hide Chat */
   .sidebar {
     width: 100%;
-    height: 100vh;
+    height: 100dvh;
     box-sizing: border-box;
     display: block;
+    overflow-y: auto;
   }
   
   .chat-container {
     display: none;
     width: 100%;
-    height: 100vh;
+    height: 100dvh;
     box-sizing: border-box;
     border-top: none;
   }
