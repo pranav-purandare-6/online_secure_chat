@@ -4,3 +4,5 @@ gevent
 gevent-websocket
 pycryptodome
 gunicorn
+SQLAlchemy
+psycopg2-binary
