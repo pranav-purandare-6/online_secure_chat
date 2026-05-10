@@ -7,7 +7,10 @@ from crypto import hash_password
 from database import (register_user, login_user, store_public_key,
                       get_public_key, save_message, get_history,
                       clear_user_history)
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+def get_ist_time():
+    return datetime.now(timezone(timedelta(hours=5, minutes=30)))
 import socket
 
 app = Flask(__name__)
@@ -57,7 +60,7 @@ def handle_login(data):
         active_users[username] = request.sid
         emit('auth', {'msg': f'✅ Welcome {username}', 'username': username})
         broadcast_users()
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] {username} logged in")
+        print(f"[{get_ist_time().strftime('%H:%M:%S')}] {username} logged in")
     else:
         emit('auth', {'msg': '❌ Invalid credentials'})
 
@@ -70,7 +73,7 @@ def handle_store_public_key(data):
     public_key = data.get('publicKey', '')
     if public_key:
         store_public_key(username, public_key)
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Stored ECDH public key for {username}")
+        print(f"[{get_ist_time().strftime('%H:%M:%S')}] Stored ECDH public key for {username}")
 
 # ===== GET PUBLIC KEY =====
 @socketio.on('get_public_key')
@@ -130,17 +133,17 @@ def handle_send_message(data):
         'to': receiver,
         'encrypted': encrypted,
         'hash': msg_hash,
-        'time': datetime.now().strftime("%H:%M")
+        'time': get_ist_time().strftime("%H:%M")
     }
 
     save_message(sender, receiver, payload)
 
     receiver_sid = user_sids.get(receiver)
     if receiver_sid:
-        emit('receive', payload, room=receiver_sid)
-    emit('receive', payload, room=request.sid)
+        emit('receive', payload, to=receiver_sid)
+    emit('receive', payload, to=request.sid)
 
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] {sender} -> {receiver}: [E2EE relay]")
+    print(f"[{get_ist_time().strftime('%H:%M:%S')}] {sender} -> {receiver}: [E2EE relay]")
 
 # ===== SEND GROUP MESSAGE (Broadcast — E2EE with wrapped keys) =====
 @socketio.on('send_group_message')
@@ -162,12 +165,12 @@ def handle_send_group_message(data):
         'encrypted': encrypted,
         'hash': msg_hash,
         'wrappedKeys': wrapped_keys,
-        'time': datetime.now().strftime("%H:%M"),
+        'time': get_ist_time().strftime("%H:%M"),
         'group': True
     }
 
     socketio.emit('group_receive', payload)
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] {sender} -> [BROADCAST]: [E2EE relay]")
+    print(f"[{get_ist_time().strftime('%H:%M:%S')}] {sender} -> [BROADCAST]: [E2EE relay]")
 
 # ===== DISCONNECT =====
 @socketio.on('disconnect')
@@ -179,7 +182,7 @@ def handle_disconnect():
         user_sids.pop(username, None)
         active_users.pop(username, None)
         clear_user_history(username)
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] {username} disconnected (history cleared)")
+        print(f"[{get_ist_time().strftime('%H:%M:%S')}] {username} disconnected (history cleared)")
         broadcast_users()
 
 # ===== TYPING INDICATOR =====
@@ -190,7 +193,7 @@ def handle_typing(data):
         return
     receiver = data.get('to')
     if receiver and receiver in user_sids:
-        emit('typing', {'from': sender}, room=user_sids[receiver])
+        emit('typing', {'from': sender}, to=user_sids[receiver])
 
 # ===== GET LAN IP =====
 def get_lan_ip():
