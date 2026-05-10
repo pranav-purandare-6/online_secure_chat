@@ -8,6 +8,7 @@ from database import (register_user, login_user, store_public_key,
                       get_public_key, save_message, get_history,
                       clear_user_history)
 from datetime import datetime, timezone, timedelta
+import re
 
 def get_ist_time():
     return datetime.now(timezone(timedelta(hours=5, minutes=30)))
@@ -33,6 +34,12 @@ def handle_register(data):
     if not username or not password:
         emit('auth', {'msg': '❌ Username and password required'})
         return
+
+    # Backend password validation
+    if len(password) < 8 or not re.search(r"[A-Z]", password) or not re.search(r"\d", password) or not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        emit('auth', {'msg': '❌ Password does not meet security requirements'})
+        return
+
     if register_user(username, hash_password(password)):
         emit('auth', {'msg': '✅ Registered successfully'})
     else:

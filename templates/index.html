@@ -23,7 +23,15 @@
 
     <div id="registerForm" style="display:none;">
       <input id="regUsername" placeholder="Username" autocomplete="username"><br><br>
-      <input id="regPassword" type="password" placeholder="Password" autocomplete="new-password"><br><br>
+      <input id="regPassword" type="password" placeholder="Password" autocomplete="new-password">
+      
+      <div id="passwordHints" class="pwd-hints">
+        <p id="hintLen" class="invalid">✗ At least 8 characters</p>
+        <p id="hintUpper" class="invalid">✗ At least 1 uppercase</p>
+        <p id="hintNum" class="invalid">✗ At least 1 number</p>
+        <p id="hintSpec" class="invalid">✗ At least 1 special char</p>
+      </div><br>
+
       <button onclick="register()">Register</button>
       <p onclick="showLogin()" style="cursor:pointer; color:#38bdf8;">Already have an account? Login</p>
     </div>
@@ -185,6 +193,13 @@ function showLogin() {
 function register() {
   var u=$id("regUsername").value.trim(), p=$id("regPassword").value;
   if (!u||!p) { $id("status").innerText="❌ Fill in all fields"; return; }
+  
+  // Frontend password validation
+  if(p.length < 8 || !/[A-Z]/.test(p) || !/\d/.test(p) || !/[!@#$%^&*(),.?":{}|<>]/.test(p)) {
+      $id("status").innerText="❌ Password does not meet security requirements";
+      return;
+  }
+
   socket.emit('register', {username:u, password:p});
 }
 
@@ -519,6 +534,21 @@ $id("loginPassword").addEventListener("keydown", function(e){
 });
 $id("regPassword").addEventListener("keydown", function(e){
   if (e.key==="Enter"){e.preventDefault();register();}
+});
+$id("regPassword").addEventListener("input", function(e){
+  var p = e.target.value;
+  // Length
+  if(p.length >= 8) { $id("hintLen").className="valid"; $id("hintLen").innerText="✓ At least 8 characters"; }
+  else { $id("hintLen").className="invalid"; $id("hintLen").innerText="✗ At least 8 characters"; }
+  // Uppercase
+  if(/[A-Z]/.test(p)) { $id("hintUpper").className="valid"; $id("hintUpper").innerText="✓ At least 1 uppercase"; }
+  else { $id("hintUpper").className="invalid"; $id("hintUpper").innerText="✗ At least 1 uppercase"; }
+  // Number
+  if(/\d/.test(p)) { $id("hintNum").className="valid"; $id("hintNum").innerText="✓ At least 1 number"; }
+  else { $id("hintNum").className="invalid"; $id("hintNum").innerText="✗ At least 1 number"; }
+  // Special
+  if(/[!@#$%^&*(),.?":{}|<>]/.test(p)) { $id("hintSpec").className="valid"; $id("hintSpec").innerText="✓ At least 1 special char"; }
+  else { $id("hintSpec").className="invalid"; $id("hintSpec").innerText="✗ At least 1 special char"; }
 });
 
 // ══════════════════════════════════════════════════════════════════════════

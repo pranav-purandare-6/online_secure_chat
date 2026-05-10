@@ -268,3 +268,27 @@ button {
     max-width: 85%;
   }
 }
+
+/* PASSWORD HINTS */
+.pwd-hints {
+  font-size: 11px;
+  text-align: left;
+  background: #0f172a;
+  padding: 8px 12px;
+  border-radius: 5px;
+  margin-top: 5px;
+  border: 1px solid #334155;
+}
+
+.pwd-hints p {
+  margin: 4px 0;
+  transition: color 0.3s ease;
+}
+
+.invalid {
+  color: #f87171; /* red */
+}
+
+.valid {
+  color: #4ade80; /* green */
+}
