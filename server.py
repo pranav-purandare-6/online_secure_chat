@@ -9,7 +9,7 @@ import socket
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secure-chat-secret-key'
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 online_users = {}   # sid -> username
 user_sids = {}      # username -> sid
