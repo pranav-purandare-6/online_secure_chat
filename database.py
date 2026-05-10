@@ -1,7 +1,9 @@
+import os
 import sqlite3
 import threading
 
-DB_FILE = "secure_chat.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_FILE = os.path.join(BASE_DIR, "secure_chat.db")
 _lock = threading.Lock()
 
 # ===== DATABASE INIT =====

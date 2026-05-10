@@ -9,7 +9,7 @@ import socket
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secure-chat-secret-key'
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 online_users = {}   # sid -> username
 user_sids = {}      # username -> sid
@@ -40,10 +40,15 @@ def handle_login(data):
     if not username or not password:
         emit('auth', {'msg': '❌ Username and password required'})
         return
-    if username in active_users:
-        emit('auth', {'msg': '❌ User already logged in on another device'})
-        return
+    
     if login_user(username, hash_password(password)):
+        # If user was already logged in (e.g. they refreshed the page),
+        # safely overwrite their previous session ID instead of blocking them.
+        if username in user_sids:
+            old_sid = user_sids[username]
+            if old_sid in online_users:
+                del online_users[old_sid]
+                
         online_users[request.sid] = username
         user_sids[username] = request.sid
         active_users[username] = request.sid
