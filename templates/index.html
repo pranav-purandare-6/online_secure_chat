@@ -61,6 +61,16 @@
   </div>
   <div class="chat-box" id="chat"></div>
   <div id="typingIndicator" class="typing-indicator"></div>
+  
+  <!-- Reply Preview Box -->
+  <div id="replyPreview" class="reply-preview" style="display:none;">
+    <div class="reply-preview-content">
+      <span id="replyPreviewName" class="reply-preview-name"></span><br>
+      <span id="replyPreviewText" class="reply-preview-text"></span>
+    </div>
+    <button onclick="cancelReply()" class="reply-cancel-btn">❌</button>
+  </div>
+
   <div class="input-box" id="chatInput" style="display:none;">
     <input id="message" placeholder="Type a message">
     <button onclick="send()">Send</button>
@@ -90,6 +100,7 @@ var usersList   = [];
 var loggedIn    = false;
 var pending     = [];
 var broadcastHistory = [];
+var replyingTo  = null;
 
 // ── ECDH state ──
 var ec = new elliptic.ec('p256');
@@ -219,6 +230,21 @@ function closeChat() {
   $id("chatInput").style.display="none";
   $id("typingIndicator").style.opacity="0";
   document.body.classList.remove("mobile-chat-active");
+  cancelReply();
+}
+
+function setReply(from, text) {
+  replyingTo = { from: from, text: text };
+  $id("replyPreviewName").innerText = from;
+  $id("replyPreviewText").innerText = text.length > 60 ? text.substring(0,60)+"..." : text;
+  $id("replyPreviewName").style.color = getUserColor(from);
+  $id("replyPreview").style.display = "flex";
+  $id("message").focus();
+}
+
+function cancelReply() {
+  replyingTo = null;
+  $id("replyPreview").style.display = "none";
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -334,10 +360,21 @@ socket.on('chat_history', function(msgs) {
     var other = msg.from===myUsername ? msg.to : msg.from;
     var aesKey = getOrDeriveKey(other);
     if (!aesKey || !msg.encrypted) continue;
-    var decrypted = decryptMsg(msg.encrypted, aesKey);
-    if (decrypted===null) continue;
-    var integrity = sha256(decrypted)===msg.hash;
-    showMsg({from:msg.from, to:msg.to, time:msg.time, decrypted:decrypted, integrity:integrity});
+    var decryptedRaw = decryptMsg(msg.encrypted, aesKey);
+    if (decryptedRaw===null) continue;
+    
+    var actualText = decryptedRaw;
+    var replyData = null;
+    try {
+      var obj = JSON.parse(decryptedRaw);
+      if (obj && obj.text !== undefined) {
+        actualText = obj.text;
+        replyData = obj.replyTo || null;
+      }
+    } catch(e) {}
+
+    var integrity = sha256(decryptedRaw)===msg.hash;
+    showMsg({from:msg.from, to:msg.to, time:msg.time, decrypted:actualText, replyTo:replyData, integrity:integrity});
     showCrypto(msg);
   }
   scrollChat();
@@ -359,18 +396,27 @@ function send() {
       socket.emit('get_public_key', {username: currentUser});
       return;
     }
-    var encrypted = encryptMsg(msg, aesKey);
-    var msgHash = sha256(msg);
+    var payloadObj = { text: msg };
+    if (replyingTo) payloadObj.replyTo = replyingTo;
+    var plaintextToEncrypt = JSON.stringify(payloadObj);
+
+    var encrypted = encryptMsg(plaintextToEncrypt, aesKey);
+    var msgHash = sha256(plaintextToEncrypt);
     socket.emit('send_message', {to:currentUser, encrypted:encrypted, hash:msgHash});
   }
   box.value=""; box.focus();
+  cancelReply();
 }
 
 function sendBroadcast(msg) {
+  var payloadObj = { text: msg };
+  if (replyingTo) payloadObj.replyTo = replyingTo;
+  var plaintextToEncrypt = JSON.stringify(payloadObj);
+
   // Generate ephemeral AES key for this message
   var ephemeralKey = CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex);
-  var encrypted = encryptMsg(msg, ephemeralKey);
-  var msgHash = sha256(msg);
+  var encrypted = encryptMsg(plaintextToEncrypt, ephemeralKey);
+  var msgHash = sha256(plaintextToEncrypt);
 
   // Wrap ephemeral key for each online user using their ECDH shared secret
   var wrappedKeys = {};
@@ -411,11 +457,21 @@ function handleReceive(data) {
     return;
   }
 
-  var decrypted = decryptMsg(data.encrypted, aesKey);
-  if (decrypted===null) return;
+  var decryptedRaw = decryptMsg(data.encrypted, aesKey);
+  if (decryptedRaw===null) return;
 
-  var integrity = sha256(decrypted)===data.hash;
-  var full = {from:data.from, to:data.to, time:data.time, encrypted:data.encrypted, decrypted:decrypted, integrity:integrity};
+  var actualText = decryptedRaw;
+  var replyData = null;
+  try {
+    var obj = JSON.parse(decryptedRaw);
+    if (obj && obj.text !== undefined) {
+      actualText = obj.text;
+      replyData = obj.replyTo || null;
+    }
+  } catch(e) {}
+
+  var integrity = sha256(decryptedRaw)===data.hash;
+  var full = {from:data.from, to:data.to, time:data.time, encrypted:data.encrypted, decrypted:actualText, replyTo:replyData, integrity:integrity};
   var isMine = data.from===myUsername;
   var isForMe = data.to===myUsername;
   if (!isMine && !isForMe) return;
@@ -453,11 +509,21 @@ socket.on('group_receive', function(data) {
     return;
   }
 
-  var decrypted = decryptMsg(data.encrypted, ephemeralKey);
-  if (decrypted===null) return;
+  var decryptedRaw = decryptMsg(data.encrypted, ephemeralKey);
+  if (decryptedRaw===null) return;
 
-  var integrity = sha256(decrypted)===data.hash;
-  var full = {from:data.from, to:'__broadcast__', time:data.time, encrypted:data.encrypted, decrypted:decrypted, integrity:integrity, group:true};
+  var actualText = decryptedRaw;
+  var replyData = null;
+  try {
+    var obj = JSON.parse(decryptedRaw);
+    if (obj && obj.text !== undefined) {
+      actualText = obj.text;
+      replyData = obj.replyTo || null;
+    }
+  } catch(e) {}
+
+  var integrity = sha256(decryptedRaw)===data.hash;
+  var full = {from:data.from, to:'__broadcast__', time:data.time, encrypted:data.encrypted, decrypted:actualText, replyTo:replyData, integrity:integrity, group:true};
 
   broadcastHistory.push(full);
 
@@ -494,6 +560,15 @@ function showMsg(data) {
   var div=document.createElement("div");
   div.className="message "+(data.from===myUsername?"sent":"received");
   var html='';
+
+  if (data.replyTo) {
+    var qc = getUserColor(data.replyTo.from);
+    html += '<div class="quoted-msg" style="border-left-color:'+qc+'">';
+    html += '<div class="quoted-name" style="color:'+qc+'">'+escapeHtml(data.replyTo.from)+'</div>';
+    html += '<div class="quoted-text">'+escapeHtml(data.replyTo.text)+'</div>';
+    html += '</div>';
+  }
+
   if (data.group && data.from!==myUsername) {
     html+='<div class="group-sender-name" style="color:'+getUserColor(data.from)+'">'+escapeHtml(data.from)+'</div>';
   } else if (data.group) {
@@ -504,7 +579,15 @@ function showMsg(data) {
   html+=(data.integrity
     ?'<div style="color:lightgreen;font-size:11px;">✔ Verified</div>'
     :'<div style="color:red;font-size:11px;">⚠ Tampered</div>');
+  
   div.innerHTML=html;
+
+  var replyBtn = document.createElement("div");
+  replyBtn.className = "reply-btn";
+  replyBtn.innerHTML = "↩";
+  replyBtn.onclick = function() { setReply(data.from, data.decrypted); };
+  div.appendChild(replyBtn);
+
   $id("chat").appendChild(div);
 }
 
