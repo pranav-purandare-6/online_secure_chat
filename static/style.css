@@ -728,6 +728,7 @@ emoji-picker {
     position: relative;
   }
 
+  /* ── LAYOUT: Sidebar + Chat as stacked absolute panels ── */
   .sidebar {
     width: 100%;
     height: 100dvh;
@@ -737,6 +738,7 @@ emoji-picker {
     position: absolute;
     top: 0; left: 0;
     z-index: 10;
+    padding: 16px 12px;
   }
   .chat-container {
     display: flex;
@@ -750,7 +752,7 @@ emoji-picker {
   }
   .crypto-panel { display: none !important; }
 
-  /* Active: slide sidebar left, chat in from right */
+  /* ── SLIDE TRANSITION ── */
   body.mobile-chat-active .sidebar {
     transform: translateX(-100%);
     opacity: 0;
@@ -760,6 +762,7 @@ emoji-picker {
     z-index: 15;
   }
 
+  /* ── HEADER ── */
   .back-btn {
     display: inline-flex;
     background: transparent !important;
@@ -772,25 +775,112 @@ emoji-picker {
     box-shadow: none !important;
   }
   .back-btn:hover {
-    transform: translateX(-2px) !important;
+    transform: none !important;
     box-shadow: none !important;
   }
   .close-btn { display: none !important; }
 
   .chat-header {
     background: #075e54;
+    padding: 12px 14px;
   }
-  .message { max-width: 85%; }
 
+  /* ── MESSAGES ── */
+  .message {
+    max-width: 82%;
+    padding: 10px 12px;
+    padding-bottom: 28px; /* space for reply btn at bottom-right */
+  }
+
+  /* ── REPLY BUTTON: inside message, bottom-right corner ── */
   .reply-btn {
-    opacity: 0.7;
-    background: transparent;
-    font-size: 16px;
-    right: 5px; top: 5px;
+    position: absolute;
+    bottom: 4px;
+    right: 8px;
+    top: auto;
+    left: auto;
+    opacity: 0.6;
+    background: rgba(255,255,255,0.1);
+    font-size: 14px;
+    width: 24px;
+    height: 24px;
   }
-  .sent .reply-btn { left: 5px; right: auto; }
+  .sent .reply-btn {
+    right: auto;
+    left: 8px;
+  }
+  .message:active .reply-btn {
+    opacity: 1;
+  }
 
-  .scroll-fab { bottom: 75px; right: 14px; }
+  /* ── EMOJI PICKER: full-width bottom sheet on mobile ── */
+  emoji-picker {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-height: 45vh;
+    z-index: 200;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+  }
+
+  /* ── IMAGE PREVIEW ── */
+  .image-preview-container {
+    bottom: 60px;
+    left: 10px;
+  }
+
+  /* ── INPUT BOX ── */
+  .input-box {
+    padding: 8px;
+    gap: 2px;
+  }
+  .input-box input {
+    font-size: 16px; /* prevents iOS zoom on focus */
+    padding: 10px 12px;
+  }
+  .input-box button {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  .icon-btn {
+    font-size: 18px;
+    padding: 4px 6px;
+  }
+
+  /* ── USER CARDS ── */
+  .user {
+    padding: 14px 12px;
+    margin: 5px 0;
+    font-size: 15px;
+  }
+  .user:hover {
+    transform: none; /* no hover on touch */
+  }
+  .user:active {
+    transform: scale(0.97);
+    background: #3d4f65;
+  }
+
+  /* ── SCROLL FAB ── */
+  .scroll-fab { bottom: 70px; right: 14px; }
+
+  /* ── TYPING INDICATOR ── */
+  .typing-indicator {
+    padding-left: 12px;
+    font-size: 11px;
+  }
+
+  /* ── BUTTON HOVER: disable on touch ── */
+  button:hover {
+    transform: none;
+    box-shadow: none;
+  }
+  button:active {
+    transform: scale(0.95);
+  }
 }
 
 /* ═══════════════════════════════════════════
