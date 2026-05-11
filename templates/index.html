@@ -8,6 +8,9 @@
 
 <body>
 
+<!-- CONNECTION STATUS BAR -->
+<div class="connection-bar" id="connectionBar"></div>
+
 <!-- LEFT SIDEBAR -->
 <div class="sidebar">
 
@@ -60,7 +63,11 @@
     <button class="close-btn" onclick="closeChat()" style="float:right; background:red; color:white; border:none; padding:5px; cursor:pointer;">❌</button>
   </div>
   <div class="chat-box" id="chat"></div>
-  <div id="typingIndicator" class="typing-indicator"></div>
+  <button class="scroll-fab" id="scrollFab" onclick="scrollChat()">↓</button>
+  <div id="typingIndicator" class="typing-indicator">
+    <span class="typing-name" id="typingName"></span>
+    <div class="typing-dots"><span></span><span></span><span></span></div>
+  </div>
   
   <!-- Reply Preview Box -->
   <div id="replyPreview" class="reply-preview" style="display:none;">
@@ -71,7 +78,17 @@
     <button onclick="cancelReply()" class="reply-cancel-btn">❌</button>
   </div>
 
+  <!-- Image Preview Box -->
+  <div id="imagePreviewContainer" class="image-preview-container">
+    <button onclick="clearPhotoPreview()" class="image-preview-close">❌</button>
+    <img id="imagePreview" src="">
+  </div>
+
   <div class="input-box" id="chatInput" style="display:none;">
+    <button class="icon-btn" id="emojiBtn" onclick="toggleEmojiPicker()">😀</button>
+    <button class="icon-btn" id="attachBtn" onclick="document.getElementById('photoInput').click()">📎</button>
+    <input type="file" id="photoInput" accept="image/*" style="display:none">
+    <emoji-picker id="emojiPicker"></emoji-picker>
     <input id="message" placeholder="Type a message">
     <button onclick="send()">Send</button>
   </div>
@@ -87,6 +104,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/elliptic/6.5.7/elliptic.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
 <script>
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -101,6 +119,7 @@ var loggedIn    = false;
 var pending     = [];
 var broadcastHistory = [];
 var replyingTo  = null;
+var selectedPhotoBase64 = null;
 
 // ── ECDH state ──
 var ec = new elliptic.ec('p256');
@@ -188,13 +207,29 @@ function sha256(msg) {
 //  FORMS
 // ══════════════════════════════════════════════════════════════════════════
 function showRegister() {
-  $id("loginForm").style.display="none";
-  $id("registerForm").style.display="block";
+  var login = $id("loginForm");
+  var reg = $id("registerForm");
+  login.classList.add('form-slide-out');
+  setTimeout(function() {
+    login.style.display='none';
+    login.classList.remove('form-slide-out');
+    reg.style.display='block';
+    reg.classList.add('form-slide-in');
+    setTimeout(function(){ reg.classList.remove('form-slide-in'); }, 300);
+  }, 250);
   $id("formTitle").innerText="Register";
 }
 function showLogin() {
-  $id("registerForm").style.display="none";
-  $id("loginForm").style.display="block";
+  var reg = $id("registerForm");
+  var login = $id("loginForm");
+  reg.classList.add('form-slide-out');
+  setTimeout(function() {
+    reg.style.display='none';
+    reg.classList.remove('form-slide-out');
+    login.style.display='block';
+    login.classList.add('form-slide-in');
+    setTimeout(function(){ login.classList.remove('form-slide-in'); }, 300);
+  }, 250);
   $id("formTitle").innerText="Login";
 }
 
@@ -228,9 +263,13 @@ function closeChat() {
   $id("chat").innerHTML=""; $id("crypto").innerHTML="";
   $id("chatTitle").innerText="Select a user";
   $id("chatInput").style.display="none";
-  $id("typingIndicator").style.opacity="0";
+  $id("typingIndicator").classList.remove('visible');
+  $id("scrollFab").classList.remove('visible');
   document.body.classList.remove("mobile-chat-active");
   cancelReply();
+  clearPhotoPreview();
+  var picker = $id("emojiPicker");
+  if (picker) picker.style.display = "none";
 }
 
 function setReply(from, text) {
@@ -251,9 +290,22 @@ function cancelReply() {
 //  AUTH RESPONSE — generate ECDH keys on login
 // ══════════════════════════════════════════════════════════════════════════
 socket.on('auth', function(data) {
-  $id("status").innerText = data.msg;
+  var statusEl = $id("status");
+  statusEl.innerText = data.msg;
+  
+  // Error shake animation
+  if (data.msg.includes('\u274C')) {
+    statusEl.classList.remove('status-shake');
+    void statusEl.offsetWidth;
+    statusEl.classList.add('status-shake');
+  }
+  
   if (data.msg.includes("Registered")) { showLogin(); return; }
   if (data.msg.includes("Welcome") && data.username) {
+    // Success flash
+    statusEl.classList.add('status-success');
+    statusEl.style.color = '#4ade80';
+    
     loggedIn = true;
     myUsername = data.username;
     $id("usersSection").style.display = "block";
@@ -261,7 +313,6 @@ socket.on('auth', function(data) {
     $id("profileSection").style.display = "block";
     $id("profileName").innerText = myUsername;
 
-    // Generate ECDH keypair and send public key to server
     generateKeyPair();
     socket.emit('store_public_key', {publicKey: myPublicHex});
 
@@ -288,7 +339,7 @@ function renderUsers() {
     $id("chatTitle").innerText="🌐 Broadcast Channel";
     $id("chat").innerHTML=""; $id("crypto").innerHTML="";
     $id("chatInput").style.display="flex";
-    $id("typingIndicator").style.opacity="0";
+    $id("typingIndicator").classList.remove('visible');
     document.body.classList.add("mobile-chat-active");
     // Fetch all online users' public keys for broadcast encryption
     socket.emit('get_online_keys');
@@ -355,29 +406,42 @@ socket.on('online_keys', function(keys) {
 // ══════════════════════════════════════════════════════════════════════════
 socket.on('chat_history', function(msgs) {
   $id("chat").innerHTML=""; $id("crypto").innerHTML="";
-  for (var i=0; i<msgs.length; i++) {
-    var msg = msgs[i];
-    var other = msg.from===myUsername ? msg.to : msg.from;
-    var aesKey = getOrDeriveKey(other);
-    if (!aesKey || !msg.encrypted) continue;
-    var decryptedRaw = decryptMsg(msg.encrypted, aesKey);
-    if (decryptedRaw===null) continue;
-    
-    var actualText = decryptedRaw;
-    var replyData = null;
-    try {
-      var obj = JSON.parse(decryptedRaw);
-      if (obj && obj.text !== undefined) {
-        actualText = obj.text;
-        replyData = obj.replyTo || null;
-      }
-    } catch(e) {}
+  // Show skeleton while processing
+  var skel = '<div class="skeleton-container">';
+  for(var s=0;s<4;s++) skel+='<div class="skeleton-msg'+(s%2?' right':'')+'"><div class="skeleton-bubble"></div></div>';
+  skel+='</div>';
+  $id("chat").innerHTML=skel;
+  
+  setTimeout(function(){
+    $id("chat").innerHTML="";
+    var staggerIdx = 0;
+    for (var i=0; i<msgs.length; i++) {
+      var msg = msgs[i];
+      var other = msg.from===myUsername ? msg.to : msg.from;
+      var aesKey = getOrDeriveKey(other);
+      if (!aesKey || !msg.encrypted) continue;
+      var decryptedRaw = decryptMsg(msg.encrypted, aesKey);
+      if (decryptedRaw===null) continue;
+      
+      var actualText = decryptedRaw;
+      var replyData = null;
+      var photoData = null;
+      try {
+        var obj = JSON.parse(decryptedRaw);
+        if (obj && (obj.text !== undefined || obj.photo !== undefined)) {
+          actualText = obj.text || "";
+          replyData = obj.replyTo || null;
+          photoData = obj.photo || null;
+        }
+      } catch(e) {}
 
-    var integrity = sha256(decryptedRaw)===msg.hash;
-    showMsg({from:msg.from, to:msg.to, time:msg.time, decrypted:actualText, replyTo:replyData, integrity:integrity});
-    showCrypto(msg);
-  }
-  scrollChat();
+      var integrity = sha256(decryptedRaw)===msg.hash;
+      showMsg({from:msg.from, to:msg.to, time:msg.time, decrypted:actualText, replyTo:replyData, photo:photoData, integrity:integrity}, staggerIdx * 40);
+      showCrypto(msg);
+      staggerIdx++;
+    }
+    scrollChat();
+  }, 300);
 });
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -385,7 +449,7 @@ socket.on('chat_history', function(msgs) {
 // ══════════════════════════════════════════════════════════════════════════
 function send() {
   var box=$id("message"), msg=box.value.trim();
-  if (!msg||!currentUser) return;
+  if ((!msg && !selectedPhotoBase64) || !currentUser) return;
 
   if (currentUser==="__broadcast__") {
     sendBroadcast(msg);
@@ -398,6 +462,7 @@ function send() {
     }
     var payloadObj = { text: msg };
     if (replyingTo) payloadObj.replyTo = replyingTo;
+    if (selectedPhotoBase64) payloadObj.photo = selectedPhotoBase64;
     var plaintextToEncrypt = JSON.stringify(payloadObj);
 
     var encrypted = encryptMsg(plaintextToEncrypt, aesKey);
@@ -405,12 +470,17 @@ function send() {
     socket.emit('send_message', {to:currentUser, encrypted:encrypted, hash:msgHash});
   }
   box.value=""; box.focus();
+  // Send button animation
+  var sendBtn = $id('chatInput').querySelector('button:last-child');
+  if (sendBtn) { sendBtn.classList.add('send-btn-animate'); setTimeout(function(){ sendBtn.classList.remove('send-btn-animate'); }, 300); }
   cancelReply();
+  clearPhotoPreview();
 }
 
 function sendBroadcast(msg) {
   var payloadObj = { text: msg };
   if (replyingTo) payloadObj.replyTo = replyingTo;
+  if (selectedPhotoBase64) payloadObj.photo = selectedPhotoBase64;
   var plaintextToEncrypt = JSON.stringify(payloadObj);
 
   // Generate ephemeral AES key for this message
@@ -462,16 +532,18 @@ function handleReceive(data) {
 
   var actualText = decryptedRaw;
   var replyData = null;
+  var photoData = null;
   try {
     var obj = JSON.parse(decryptedRaw);
-    if (obj && obj.text !== undefined) {
-      actualText = obj.text;
+    if (obj && (obj.text !== undefined || obj.photo !== undefined)) {
+      actualText = obj.text || "";
       replyData = obj.replyTo || null;
+      photoData = obj.photo || null;
     }
   } catch(e) {}
 
   var integrity = sha256(decryptedRaw)===data.hash;
-  var full = {from:data.from, to:data.to, time:data.time, encrypted:data.encrypted, decrypted:actualText, replyTo:replyData, integrity:integrity};
+  var full = {from:data.from, to:data.to, time:data.time, encrypted:data.encrypted, decrypted:actualText, replyTo:replyData, photo:photoData, integrity:integrity};
   var isMine = data.from===myUsername;
   var isForMe = data.to===myUsername;
   if (!isMine && !isForMe) return;
@@ -480,6 +552,11 @@ function handleReceive(data) {
     showMsg(full); showCrypto(full); scrollChat();
   } else if (isForMe) {
     unread[other]=(unread[other]||0)+1; renderUsers();
+    // Glow effect on user card
+    setTimeout(function(){
+      var cards = document.querySelectorAll('.user');
+      cards.forEach(function(c){ if(c.textContent.includes(other)) c.classList.add('user-glow'); });
+    }, 50);
   }
 }
 
@@ -514,16 +591,18 @@ socket.on('group_receive', function(data) {
 
   var actualText = decryptedRaw;
   var replyData = null;
+  var photoData = null;
   try {
     var obj = JSON.parse(decryptedRaw);
-    if (obj && obj.text !== undefined) {
-      actualText = obj.text;
+    if (obj && (obj.text !== undefined || obj.photo !== undefined)) {
+      actualText = obj.text || "";
       replyData = obj.replyTo || null;
+      photoData = obj.photo || null;
     }
   } catch(e) {}
 
   var integrity = sha256(decryptedRaw)===data.hash;
-  var full = {from:data.from, to:'__broadcast__', time:data.time, encrypted:data.encrypted, decrypted:actualText, replyTo:replyData, integrity:integrity, group:true};
+  var full = {from:data.from, to:'__broadcast__', time:data.time, encrypted:data.encrypted, decrypted:actualText, replyTo:replyData, photo:photoData, integrity:integrity, group:true};
 
   broadcastHistory.push(full);
 
@@ -541,10 +620,10 @@ var tyTimer;
 socket.on('typing', function(data) {
   if (data.from!==currentUser) return;
   var el=$id("typingIndicator");
-  el.innerHTML=data.from+' is typing <span class="dots">...</span>';
-  el.style.opacity="1";
+  $id("typingName").innerText=data.from+' is typing';
+  el.classList.add('visible');
   clearTimeout(tyTimer);
-  tyTimer=setTimeout(function(){ el.style.opacity="0"; },1500);
+  tyTimer=setTimeout(function(){ el.classList.remove('visible'); },1500);
 });
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -556,9 +635,16 @@ function getUserColor(username) {
   return 'hsl('+Math.abs(hash)%360+', 80%, 65%)';
 }
 
-function showMsg(data) {
+function showMsg(data, staggerDelay) {
   var div=document.createElement("div");
   div.className="message "+(data.from===myUsername?"sent":"received");
+  
+  // Stagger animation for history load
+  if (staggerDelay !== undefined && staggerDelay > 0) {
+    div.classList.add('msg-stagger');
+    div.style.animationDelay = staggerDelay + 'ms';
+  }
+  
   var html='';
 
   if (data.replyTo) {
@@ -574,11 +660,18 @@ function showMsg(data) {
   } else if (data.group) {
     html+='<div class="group-sender-name" style="color:#22c55e">You</div>';
   }
-  html+=escapeHtml(data.decrypted);
+  
+  if (data.photo) {
+    html += '<img src="' + data.photo + '" class="message-photo" onclick="window.open(this.src, \'_blank\')">';
+  }
+  if (data.decrypted) {
+    html+=escapeHtml(data.decrypted);
+  }
+  
   html+='<div class="time">'+data.time+'</div>';
   html+=(data.integrity
-    ?'<div style="color:lightgreen;font-size:11px;">✔ Verified</div>'
-    :'<div style="color:red;font-size:11px;">⚠ Tampered</div>');
+    ?'<div style="color:#4ade80;font-size:11px;">✔ Verified</div>'
+    :'<div style="color:#f87171;font-size:11px;">⚠ Tampered</div>');
   
   div.innerHTML=html;
 
@@ -635,12 +728,135 @@ $id("regPassword").addEventListener("input", function(e){
 });
 
 // ══════════════════════════════════════════════════════════════════════════
+//  EMOJIS & PHOTOS
+// ══════════════════════════════════════════════════════════════════════════
+function toggleEmojiPicker() {
+  var picker = $id("emojiPicker");
+  picker.style.display = (picker.style.display === "block") ? "none" : "block";
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  var picker = $id("emojiPicker");
+  if (picker) {
+    picker.addEventListener('emoji-click', function(event) {
+      var msgBox = $id("message");
+      msgBox.value += event.detail.unicode;
+      msgBox.focus();
+    });
+  }
+});
+
+// Close emoji picker when clicking outside
+document.addEventListener('click', function(event) {
+  var picker = $id("emojiPicker");
+  var emojiBtn = $id("emojiBtn");
+  if (picker && picker.style.display === "block" && !picker.contains(event.target) && event.target !== emojiBtn) {
+    picker.style.display = "none";
+  }
+});
+
+$id("photoInput").addEventListener("change", function(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+
+  var reader = new FileReader();
+  reader.onload = function(event) {
+    var img = new Image();
+    img.onload = function() {
+      // Compress the image using a canvas
+      var canvas = document.createElement("canvas");
+      var ctx = canvas.getContext("2d");
+      var maxWidth = 800;
+      var maxHeight = 800;
+      var width = img.width;
+      var height = img.height;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height *= maxWidth / width;
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width *= maxHeight / height;
+          height = maxHeight;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // Get base64 Data URL
+      selectedPhotoBase64 = canvas.toDataURL("image/jpeg", 0.7);
+      
+      // Show preview
+      $id("imagePreview").src = selectedPhotoBase64;
+      $id("imagePreviewContainer").style.display = "block";
+    };
+    img.src = event.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+function clearPhotoPreview() {
+  selectedPhotoBase64 = null;
+  $id("imagePreview").src = "";
+  $id("imagePreviewContainer").style.display = "none";
+  $id("photoInput").value = "";
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 //  CONNECTION STATUS
 // ══════════════════════════════════════════════════════════════════════════
 socket.on('error', function(data) { $id("status").innerText=data.msg; });
-socket.on('connect', function() { console.log("[SOCKET] Connected"); });
+socket.on('connect', function() {
+  console.log("[SOCKET] Connected");
+  var bar = $id('connectionBar');
+  bar.classList.add('connected');
+  setTimeout(function(){ bar.classList.remove('connected'); }, 1500);
+});
 socket.on('disconnect', function() {
-  if (loggedIn) $id("status").innerText="⚠ Disconnected...";
+  if (loggedIn) $id("status").innerText="\u26A0 Disconnected...";
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+//  SCROLL-TO-BOTTOM FAB
+// ══════════════════════════════════════════════════════════════════════════
+var chatBox = $id('chat');
+chatBox.addEventListener('scroll', function() {
+  var fab = $id('scrollFab');
+  var atBottom = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight < 100;
+  if (atBottom) { fab.classList.remove('visible'); }
+  else { fab.classList.add('visible'); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+//  RIPPLE EFFECT ON BUTTONS
+// ══════════════════════════════════════════════════════════════════════════
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('button:not(.icon-btn):not(.reply-btn):not(.reply-cancel-btn):not(.image-preview-close):not(.scroll-fab):not(.back-btn)');
+  if (!btn) return;
+  var rect = btn.getBoundingClientRect();
+  var ripple = document.createElement('span');
+  ripple.className = 'ripple';
+  var size = Math.max(rect.width, rect.height);
+  ripple.style.width = ripple.style.height = size + 'px';
+  ripple.style.left = (e.clientX - rect.left - size/2) + 'px';
+  ripple.style.top = (e.clientY - rect.top - size/2) + 'px';
+  btn.appendChild(ripple);
+  setTimeout(function(){ ripple.remove(); }, 500);
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+//  USER CARD HOVER GLOW TRACKING
+// ══════════════════════════════════════════════════════════════════════════
+document.addEventListener('mousemove', function(e) {
+  var card = e.target.closest('.user');
+  if (!card) return;
+  var rect = card.getBoundingClientRect();
+  card.style.setProperty('--mx', ((e.clientX - rect.left) / rect.width * 100) + '%');
+  card.style.setProperty('--my', ((e.clientY - rect.top) / rect.height * 100) + '%');
 });
 
 </script>
