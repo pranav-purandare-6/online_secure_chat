@@ -55,7 +55,7 @@ body {
   padding: 24px 18px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   backdrop-filter: blur(10px);
   border-right: 1px solid rgba(255,255,255,0.05);
   animation: sidebarIn 0.5s ease;
@@ -71,7 +71,7 @@ body {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.3px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   animation: titleGlow 2s ease-in-out infinite alternate;
 }
 @keyframes titleGlow {
@@ -188,7 +188,7 @@ body {
 #loginForm, #registerForm {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 18px;
   transition: all 0.35s ease;
 }
 .form-slide-out { animation: formOut 0.25s ease forwards; }
@@ -224,16 +224,16 @@ body {
 
 /* ── PASSWORD HINTS ── */
 .pwd-hints {
-  font-size: 11px;
+  font-size: 12px;
   text-align: left;
   background: var(--bg-primary);
-  padding: 10px 14px;
+  padding: 14px 16px;
   border-radius: 8px;
-  margin-top: 6px;
+  margin-top: 2px;
   border: 1px solid var(--bg-tertiary);
 }
 .pwd-hints p {
-  margin: 5px 0;
+  margin: 7px 0;
   transition: all 0.3s ease;
   transform-origin: left;
 }
@@ -250,7 +250,7 @@ body {
    INPUTS & BUTTONS
    ═══════════════════════════════════════════ */
 input {
-  padding: 11px 14px;
+  padding: 13px 16px;
   border: 2px solid transparent;
   border-radius: 8px;
   background: var(--bg-primary);
