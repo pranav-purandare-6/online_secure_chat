@@ -120,6 +120,7 @@ var pending     = [];
 var broadcastHistory = [];
 var replyingTo  = null;
 var selectedPhotoBase64 = null;
+var pendingHistoryData = null;  // buffered history waiting for key exchange
 
 // ── ECDH state ──
 var ec = new elliptic.ec('p256');
@@ -260,6 +261,7 @@ function logout() { location.reload(); }
 
 function closeChat() {
   currentUser="";
+  pendingHistoryData = null;
   $id("chat").innerHTML=""; $id("crypto").innerHTML="";
   $id("chatTitle").innerText="Select a user";
   $id("chatInput").style.display="none";
@@ -389,6 +391,11 @@ socket.on('public_key', function(data) {
     derivedKeys[data.username] = null; // force re-derive
     var k = getOrDeriveKey(data.username);
     console.log("[E2EE] Derived shared key with", data.username, k?"OK":"FAIL");
+    // Process any pending history that was waiting for this key
+    if (pendingHistoryData && pendingHistoryData.user === data.username && currentUser === data.username) {
+      processHistoryMessages(pendingHistoryData.msgs);
+      pendingHistoryData = null;
+    }
   }
 });
 
@@ -406,43 +413,58 @@ socket.on('online_keys', function(keys) {
 // ══════════════════════════════════════════════════════════════════════════
 socket.on('chat_history', function(msgs) {
   $id("chat").innerHTML=""; $id("crypto").innerHTML="";
+  if (!msgs.length) return;
+
   // Show skeleton while processing
   var skel = '<div class="skeleton-container">';
   for(var s=0;s<4;s++) skel+='<div class="skeleton-msg'+(s%2?' right':'')+'"><div class="skeleton-bubble"></div></div>';
   skel+='</div>';
   $id("chat").innerHTML=skel;
-  
-  setTimeout(function(){
-    $id("chat").innerHTML="";
-    var staggerIdx = 0;
-    for (var i=0; i<msgs.length; i++) {
-      var msg = msgs[i];
-      var other = msg.from===myUsername ? msg.to : msg.from;
-      var aesKey = getOrDeriveKey(other);
-      if (!aesKey || !msg.encrypted) continue;
-      var decryptedRaw = decryptMsg(msg.encrypted, aesKey);
-      if (decryptedRaw===null) continue;
-      
-      var actualText = decryptedRaw;
-      var replyData = null;
-      var photoData = null;
-      try {
-        var obj = JSON.parse(decryptedRaw);
-        if (obj && (obj.text !== undefined || obj.photo !== undefined)) {
-          actualText = obj.text || "";
-          replyData = obj.replyTo || null;
-          photoData = obj.photo || null;
-        }
-      } catch(e) {}
 
-      var integrity = sha256(decryptedRaw)===msg.hash;
-      showMsg({from:msg.from, to:msg.to, time:msg.time, decrypted:actualText, replyTo:replyData, photo:photoData, integrity:integrity}, staggerIdx * 40);
-      showCrypto(msg);
-      staggerIdx++;
+  setTimeout(function(){
+    // Check if key is available yet
+    var testOther = msgs[0].from===myUsername ? msgs[0].to : msgs[0].from;
+    var aesKey = getOrDeriveKey(testOther);
+    if (!aesKey) {
+      // Key not ready — buffer history and wait for public_key response
+      pendingHistoryData = { user: testOther, msgs: msgs };
+      console.log("[E2EE] History buffered, waiting for key from", testOther);
+      return;
     }
-    scrollChat();
+    processHistoryMessages(msgs);
   }, 300);
 });
+
+function processHistoryMessages(msgs) {
+  $id("chat").innerHTML="";
+  var staggerIdx = 0;
+  for (var i=0; i<msgs.length; i++) {
+    var msg = msgs[i];
+    var other = msg.from===myUsername ? msg.to : msg.from;
+    var aesKey = getOrDeriveKey(other);
+    if (!aesKey || !msg.encrypted) continue;
+    var decryptedRaw = decryptMsg(msg.encrypted, aesKey);
+    if (decryptedRaw===null) continue;
+
+    var actualText = decryptedRaw;
+    var replyData = null;
+    var photoData = null;
+    try {
+      var obj = JSON.parse(decryptedRaw);
+      if (obj && (obj.text !== undefined || obj.photo !== undefined)) {
+        actualText = obj.text || "";
+        replyData = obj.replyTo || null;
+        photoData = obj.photo || null;
+      }
+    } catch(e) {}
+
+    var integrity = sha256(decryptedRaw)===msg.hash;
+    showMsg({from:msg.from, to:msg.to, time:msg.time, decrypted:actualText, replyTo:replyData, photo:photoData, integrity:integrity}, staggerIdx * 40);
+    showCrypto(msg);
+    staggerIdx++;
+  }
+  scrollChat();
+}
 
 // ══════════════════════════════════════════════════════════════════════════
 //  SEND (E2EE — encrypt client-side, server never sees plaintext)
@@ -639,10 +661,12 @@ function showMsg(data, staggerDelay) {
   var div=document.createElement("div");
   div.className="message "+(data.from===myUsername?"sent":"received");
   
-  // Stagger animation for history load
+  // Stagger animation for history load (transition-based, not animation-delay)
   if (staggerDelay !== undefined && staggerDelay > 0) {
     div.classList.add('msg-stagger');
-    div.style.animationDelay = staggerDelay + 'ms';
+    (function(el, delay) {
+      setTimeout(function() { el.classList.add('msg-visible'); }, delay);
+    })(div, staggerDelay);
   }
   
   var html='';
