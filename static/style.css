@@ -52,9 +52,10 @@ body {
 .sidebar {
   width: 20%;
   background: var(--bg-secondary);
-  padding: 20px 15px;
+  padding: 24px 18px;
   display: flex;
   flex-direction: column;
+  gap: 16px;
   backdrop-filter: blur(10px);
   border-right: 1px solid rgba(255,255,255,0.05);
   animation: sidebarIn 0.5s ease;
@@ -70,6 +71,7 @@ body {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.3px;
+  margin-bottom: 4px;
   animation: titleGlow 2s ease-in-out infinite alternate;
 }
 @keyframes titleGlow {
@@ -79,8 +81,8 @@ body {
 
 /* ── USER CARDS ── */
 .user {
-  padding: 12px 14px;
-  margin: 4px 0;
+  padding: 14px 16px;
+  margin: 6px 0;
   background: var(--bg-tertiary);
   border-radius: var(--radius);
   cursor: pointer;
@@ -148,9 +150,32 @@ body {
 }
 
 /* ── PROFILE SECTION ── */
+#profileSection {
+  padding: 10px 0;
+}
 #profileSection h4 {
   font-size: 16px;
   font-weight: 600;
+  margin-bottom: 12px;
+}
+#profileSection button {
+  margin-top: 4px;
+}
+
+/* ── STATUS ── */
+#status {
+  font-size: 13px;
+  font-weight: 500;
+  min-height: 20px;
+  color: #90ee90;
+  transition: all 0.3s ease;
+}
+
+/* ── USERS SECTION ── */
+#usersSection {
+  padding-top: 4px;
+}
+#usersSection h3 {
   margin-bottom: 10px;
 }
 
@@ -161,6 +186,9 @@ body {
   position: relative;
 }
 #loginForm, #registerForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   transition: all 0.35s ease;
 }
 .form-slide-out { animation: formOut 0.25s ease forwards; }
@@ -174,11 +202,6 @@ body {
 }
 
 /* ── STATUS MESSAGES ── */
-#status {
-  font-size: 13px;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
 .status-shake {
   animation: shake 0.4s ease;
 }

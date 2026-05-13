@@ -18,14 +18,14 @@
 
   <div id="authSection">
     <div id="loginForm">
-      <input id="loginUsername" placeholder="Username" autocomplete="username"><br><br>
-      <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password"><br><br>
+      <input id="loginUsername" placeholder="Username" autocomplete="username">
+      <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password">
       <button onclick="login()">Login</button>
       <p onclick="showRegister()" style="cursor:pointer; color:#38bdf8;">New user? Register</p>
     </div>
 
     <div id="registerForm" style="display:none;">
-      <input id="regUsername" placeholder="Username" autocomplete="username"><br><br>
+      <input id="regUsername" placeholder="Username" autocomplete="username">
       <input id="regPassword" type="password" placeholder="Password" autocomplete="new-password">
       
       <div id="passwordHints" class="pwd-hints">
@@ -33,7 +33,7 @@
         <p id="hintUpper" class="invalid">✗ At least 1 uppercase</p>
         <p id="hintNum" class="invalid">✗ At least 1 number</p>
         <p id="hintSpec" class="invalid">✗ At least 1 special char</p>
-      </div><br>
+      </div>
 
       <button onclick="register()">Register</button>
       <p onclick="showLogin()" style="cursor:pointer; color:#38bdf8;">Already have an account? Login</p>
@@ -45,7 +45,7 @@
     <button onclick="logout()" style="background:red;color:white;">Logout</button>
   </div>
 
-  <p id="status" style="color:lightgreen;"></p>
+  <p id="status"></p>
 
   <hr>
   <div id="usersSection" style="display:none;">
@@ -343,6 +343,7 @@ function renderUsers() {
     $id("chatInput").style.display="flex";
     $id("typingIndicator").classList.remove('visible');
     document.body.classList.add("mobile-chat-active");
+    history.pushState({chat: true}, '');
     // Fetch all online users' public keys for broadcast encryption
     socket.emit('get_online_keys');
     renderUsers();
@@ -368,6 +369,7 @@ function renderUsers() {
       $id("chat").innerHTML=""; $id("crypto").innerHTML="";
       $id("chatInput").style.display="flex";
       document.body.classList.add("mobile-chat-active");
+      history.pushState({chat: true}, '');
       renderUsers();
       // Request peer's public key then load history
       socket.emit('get_public_key', {username: u});
@@ -881,6 +883,27 @@ document.addEventListener('mousemove', function(e) {
   var rect = card.getBoundingClientRect();
   card.style.setProperty('--mx', ((e.clientX - rect.left) / rect.width * 100) + '%');
   card.style.setProperty('--my', ((e.clientY - rect.top) / rect.height * 100) + '%');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+//  MOBILE HARDWARE BACK BUTTON (History API)
+// ══════════════════════════════════════════════════════════════════════════
+window.addEventListener('popstate', function(e) {
+  if (document.body.classList.contains('mobile-chat-active')) {
+    // Close chat without pushing/popping history again
+    currentUser="";
+    pendingHistoryData = null;
+    $id("chat").innerHTML=""; $id("crypto").innerHTML="";
+    $id("chatTitle").innerText="Select a user";
+    $id("chatInput").style.display="none";
+    $id("typingIndicator").classList.remove('visible');
+    $id("scrollFab").classList.remove('visible');
+    document.body.classList.remove("mobile-chat-active");
+    cancelReply();
+    clearPhotoPreview();
+    var picker = $id("emojiPicker");
+    if (picker) picker.style.display = "none";
+  }
 });
 
 </script>
