@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HoloGrid-E2EE // Secure Console</title>
+<title>Secure Chat — E2EE Messaging</title>
 <!-- Google Fonts: Space Grotesk for Headings, Inter for Body Chat -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -27,12 +27,11 @@
 <!-- CONNECTION STATUS BAR -->
 <div class="connection-bar" id="connectionBar"></div>
 
-<!-- LASER SWEEP LINE -->
-<div class="laser-sweep"></div>
+
 
 <!-- HUD HEADER BANNER -->
 <header class="hud-banner">
-  <div class="hud-title">HOLOGRID-E2EE <span>V2.4.0</span></div>
+  <div class="hud-title">SECURE CHAT <span>E2EE</span></div>
   <div class="hud-telemetry">
     <div class="telemetry-item"><div class="beacon-pulse"></div> STATUS: <strong>ONLINE</strong></div>
     <div class="telemetry-item">SECURE ENGINES: <strong>ECDH P-256 + AES-128-CBC</strong></div>
@@ -976,6 +975,54 @@ $id("regPassword").addEventListener("input", function(e){
 function toggleEmojiPicker() {
   var picker = $id("emojiPicker");
   picker.style.display = (picker.style.display === "block") ? "none" : "block";
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  SYSTEM INITIALIZATION BOOT SEQUENCE
+// ══════════════════════════════════════════════════════════════════════════
+function runBootSequence() {
+  var splash = $id("bootSplash");
+  var logs = $id("bootLogs");
+  var progress = $id("bootProgress");
+  if (!splash || !logs || !progress) return;
+
+  var lines = [
+    { text: ">>> [SYS_INITIALIZE] CREATING SECURE COMMS CONDUIT...", delay: 200, progress: 15 },
+    { text: ">>> [SYS_DIAGNOSTIC] EXAMINING HARDWARE CPU ENGINES... [OK]", delay: 250, progress: 35 },
+    { text: ">>> [SYS_CRYPTO] ISOLATING NIST P-256 CURVE LIBRARIES... [OK]", delay: 200, progress: 60 },
+    { text: ">>> [SYS_SANDBOX] PROTECTING CLIENT-SIDE MEMORY ARRAYS... [OK]", delay: 180, progress: 80 },
+    { text: ">>> [SYS_NODE] CONNECTING TO SECURE RELAY HUB... [ONLINE]", delay: 250, progress: 95 },
+    { text: ">>> SECURE CHANNEL SECURED. GRANTED HOST node_" + Math.floor(1000 + Math.random()*9000) + ".", delay: 150, progress: 100 }
+  ];
+
+  var currentIdx = 0;
+  function printNextLine() {
+    if (currentIdx < lines.length) {
+      var item = lines[currentIdx];
+      
+      var lineEl = document.createElement("div");
+      lineEl.innerText = item.text;
+      logs.appendChild(lineEl);
+      logs.scrollTop = logs.scrollHeight;
+
+      progress.style.width = item.progress + "%";
+
+      currentIdx++;
+      setTimeout(printNextLine, item.delay);
+    } else {
+      setTimeout(function() {
+        splash.style.transition = "opacity 0.4s ease, filter 0.4s ease";
+        splash.style.opacity = "0";
+        splash.style.filter = "blur(10px)";
+        sessionStorage.setItem('booted', 'true');
+        setTimeout(function() {
+          splash.style.display = "none";
+        }, 400);
+      }, 300);
+    }
+  }
+
+  setTimeout(printNextLine, 150);
 }
 
 document.addEventListener('DOMContentLoaded', function() {
