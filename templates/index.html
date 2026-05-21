@@ -2,102 +2,185 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Secure Chat</title>
+<title>HoloGrid-E2EE // Secure Console</title>
+<!-- Google Fonts: Space Grotesk for Headings, Inter for Body Chat -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 
 <body>
 
+<!-- SYSTEM INITIALIZATION SPLASH (First-time browser boot sequence) -->
+<div class="sys-boot-splash" id="bootSplash">
+  <div class="boot-matrix-grid"></div>
+  <div class="boot-console-box">
+    <div class="boot-header">SYSTEM INITIALIZATION V2.4.0</div>
+    <div class="boot-logs" id="bootLogs"></div>
+    <div class="boot-loader-line">
+      <div class="boot-loader-progress" id="bootProgress"></div>
+    </div>
+  </div>
+</div>
+
 <!-- CONNECTION STATUS BAR -->
 <div class="connection-bar" id="connectionBar"></div>
 
-<!-- LEFT SIDEBAR -->
-<div class="sidebar">
+<!-- LASER SWEEP LINE -->
+<div class="laser-sweep"></div>
 
-  <h3 id="formTitle">Login</h3>
+<!-- HUD HEADER BANNER -->
+<header class="hud-banner">
+  <div class="hud-title">HOLOGRID-E2EE <span>V2.4.0</span></div>
+  <div class="hud-telemetry">
+    <div class="telemetry-item"><div class="beacon-pulse"></div> STATUS: <strong>ONLINE</strong></div>
+    <div class="telemetry-item">SECURE ENGINES: <strong>ECDH P-256 + AES-128-CBC</strong></div>
+  </div>
+</header>
 
-  <div id="authSection">
-    <div id="loginForm">
-      <input id="loginUsername" placeholder="Username" autocomplete="username">
-      <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password">
-      <button onclick="login()">Login</button>
-      <p onclick="showRegister()" style="cursor:pointer; color:#38bdf8;">New user? Register</p>
-    </div>
+<!-- MAIN COCKPIT GRID -->
+<div class="cockpit-grid">
 
-    <div id="registerForm" style="display:none;">
-      <input id="regUsername" placeholder="Username" autocomplete="username">
-      <input id="regPassword" type="password" placeholder="Password" autocomplete="new-password">
+  <!-- LEFT SIDEBAR: Identity Node Terminal -->
+  <div class="sidebar">
+    <div class="panel-section-title">👤 Identity Node</div>
+
+    <div id="authSection">
+      <h3 id="formTitle" style="font-family: var(--font-hud); font-size: 14px; margin-bottom: 12px; color: var(--accent-cyan);">Login</h3>
       
-      <div id="passwordHints" class="pwd-hints">
-        <p id="hintLen" class="invalid">✗ At least 8 characters</p>
-        <p id="hintUpper" class="invalid">✗ At least 1 uppercase</p>
-        <p id="hintNum" class="invalid">✗ At least 1 number</p>
-        <p id="hintSpec" class="invalid">✗ At least 1 special char</p>
+      <div id="loginForm">
+        <input id="loginUsername" placeholder="Username" autocomplete="username">
+        <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password">
+        <button onclick="login()">Login</button>
+        <p onclick="showRegister()" style="cursor:pointer; color:var(--accent-cyan); font-size:12px; text-align:center; margin-top:8px;">New user? Register</p>
       </div>
 
-      <button onclick="register()">Register</button>
-      <p onclick="showLogin()" style="cursor:pointer; color:#38bdf8;">Already have an account? Login</p>
+      <div id="registerForm" style="display:none;">
+        <input id="regUsername" placeholder="Username" autocomplete="username">
+        <input id="regPassword" type="password" placeholder="Password" autocomplete="new-password">
+        
+        <div id="passwordHints" class="pwd-hints">
+          <p id="hintLen" class="invalid">✗ At least 8 characters</p>
+          <p id="hintUpper" class="invalid">✗ At least 1 uppercase</p>
+          <p id="hintNum" class="invalid">✗ At least 1 number</p>
+          <p id="hintSpec" class="invalid">✗ At least 1 special char</p>
+        </div>
+
+        <button onclick="register()">Register</button>
+        <p onclick="showLogin()" style="cursor:pointer; color:var(--accent-cyan); font-size:12px; text-align:center; margin-top:8px;">Already have an account? Login</p>
+      </div>
+    </div>
+
+    <div id="profileSection" style="display:none;">
+      <h4>👤 <span id="profileName"></span></h4>
+      <button onclick="logout()" style="background:var(--neon-red); color:white; width:100%; margin-top:10px;">Logout</button>
+    </div>
+
+    <p id="status"></p>
+
+    <div id="usersSection" style="display:none;">
+      <div class="panel-section-title">📡 Satellite Nodes</div>
+      <div id="users"></div>
     </div>
   </div>
 
-  <div id="profileSection" style="display:none;">
-    <h4>👤 <span id="profileName"></span></h4>
-    <button onclick="logout()" style="background:red;color:white;">Logout</button>
+  <!-- CENTER: Comms Conduit Chat Container -->
+  <div class="chat-container">
+    <!-- Active Key Exchange Scanner Overlay -->
+    <div class="handshake-scanner-overlay" id="handshakeScanner">
+      <div class="scanner-grid">
+        <div class="scanner-beam"></div>
+      </div>
+      <div class="scanner-matrix" id="scannerTelemetry">ESTABLISHING SECURE COMMS CONDUIT...</div>
+    </div>
+
+    <div class="chat-header">
+      <button class="back-btn" onclick="closeChat()">⬅</button>
+      <span id="chatTitle">Select a user</span>
+      <button class="close-btn" onclick="closeChat()">❌ TERMINATE</button>
+    </div>
+
+    <!-- REAL-TIME CRYPTOGRAPHIC TELEMETRY HUD -->
+    <div class="crypto-telemetry-hud" id="telemetryHud" style="display:none;">
+      <div class="hud-stat"><strong>TARGET NODE:</strong> <span class="hud-stat-value" id="hudTargetNode">-</span></div>
+      <div class="hud-stat"><strong>CURVE:</strong> <span class="hud-stat-value">secp256r1</span></div>
+      <div class="hud-stat"><strong>PEER KEY:</strong> <span class="hud-stat-value" id="hudPeerKey">-</span></div>
+      <div class="hud-stat"><strong>SHARED SECRET:</strong> <span class="hud-stat-value" id="hudSharedSecret">-</span></div>
+      <div class="hud-stat"><strong>LAST IV:</strong> <span class="hud-stat-value" id="hudLastIv">-</span></div>
+    </div>
+
+    <div class="chat-box" id="chat"></div>
+    <button class="scroll-fab" id="scrollFab" onclick="scrollChat()">↓</button>
+    
+    <div id="typingIndicator" class="typing-indicator">
+      <span class="typing-name" id="typingName"></span>
+      <div class="typing-dots"><span></span><span></span><span></span></div>
+    </div>
+    
+    <!-- Reply Preview Box -->
+    <div id="replyPreview" class="reply-preview" style="display:none;">
+      <div class="reply-preview-content">
+        <span id="replyPreviewName" class="reply-preview-name"></span><br>
+        <span id="replyPreviewText" class="reply-preview-text"></span>
+      </div>
+      <button onclick="cancelReply()" class="reply-cancel-btn">❌</button>
+    </div>
+
+    <!-- Image Preview Box -->
+    <div id="imagePreviewContainer" class="image-preview-container">
+      <button onclick="clearPhotoPreview()" class="image-preview-close">❌</button>
+      <img id="imagePreview" src="">
+    </div>
+
+    <div class="input-box" id="chatInput" style="display:none;">
+      <button class="icon-btn" id="emojiBtn" onclick="toggleEmojiPicker()">😀</button>
+      <button class="icon-btn" id="attachBtn" onclick="document.getElementById('photoInput').click()">📎</button>
+      <input type="file" id="photoInput" accept="image/*" style="display:none">
+      <emoji-picker id="emojiPicker"></emoji-picker>
+      <input id="message" placeholder="Type a message">
+      <button onclick="send()">Send</button>
+    </div>
   </div>
 
-  <p id="status"></p>
-
-  <hr>
-  <div id="usersSection" style="display:none;">
-    <h3>Online Users</h3>
-    <div id="users"></div>
+  <!-- RIGHT: Telemetry Decoupler Encryption Log Panel -->
+  <div class="crypto-panel">
+    <h3>🔐 Telemetry Decoupler</h3>
+    <div id="crypto"></div>
   </div>
 
 </div>
 
-<!-- CHAT -->
-<div class="chat-container">
-  <div class="chat-header">
-    <button class="back-btn" onclick="closeChat()">⬅</button>
-    <span id="chatTitle">Select a user</span>
-    <button class="close-btn" onclick="closeChat()" style="float:right; background:red; color:white; border:none; padding:5px; cursor:pointer;">❌</button>
-  </div>
-  <div class="chat-box" id="chat"></div>
-  <button class="scroll-fab" id="scrollFab" onclick="scrollChat()">↓</button>
-  <div id="typingIndicator" class="typing-indicator">
-    <span class="typing-name" id="typingName"></span>
-    <div class="typing-dots"><span></span><span></span><span></span></div>
-  </div>
-  
-  <!-- Reply Preview Box -->
-  <div id="replyPreview" class="reply-preview" style="display:none;">
-    <div class="reply-preview-content">
-      <span id="replyPreviewName" class="reply-preview-name"></span><br>
-      <span id="replyPreviewText" class="reply-preview-text"></span>
+<!-- INTERACTIVE CRYPTO INSPECTOR DIALOG -->
+<div class="crypto-inspector-modal" id="cryptoInspectorModal">
+  <div class="inspector-card">
+    <button class="inspector-close" onclick="closeCryptoInspector()">&times;</button>
+    <div class="inspector-title">🔐 Cryptographic Integrity Audit</div>
+    <div class="inspector-row">
+      <div class="inspector-label">Sender Address / Node</div>
+      <div class="inspector-value" id="inspectSender">-</div>
     </div>
-    <button onclick="cancelReply()" class="reply-cancel-btn">❌</button>
+    <div class="inspector-row">
+      <div class="inspector-label">Receiver Address / Node</div>
+      <div class="inspector-value" id="inspectReceiver">-</div>
+    </div>
+    <div class="inspector-row">
+      <div class="inspector-label">Encrypted Payload (Ciphertext)</div>
+      <div class="inspector-value" id="inspectCiphertext" style="font-family:monospace; max-height:80px; overflow-y:auto;">-</div>
+    </div>
+    <div class="inspector-row">
+      <div class="inspector-label">Decrypted Payload JSON</div>
+      <div class="inspector-value" id="inspectPlaintext" style="font-family:monospace; max-height:80px; overflow-y:auto;">-</div>
+    </div>
+    <div class="inspector-row">
+      <div class="inspector-label">Payload Hash (SHA-256)</div>
+      <div class="inspector-value" id="inspectHash" style="font-family:monospace;">-</div>
+    </div>
+    <div class="inspector-row">
+      <div class="inspector-label">Verification Integrity Audit</div>
+      <div class="inspector-value" id="inspectStatus">-</div>
+    </div>
   </div>
-
-  <!-- Image Preview Box -->
-  <div id="imagePreviewContainer" class="image-preview-container">
-    <button onclick="clearPhotoPreview()" class="image-preview-close">❌</button>
-    <img id="imagePreview" src="">
-  </div>
-
-  <div class="input-box" id="chatInput" style="display:none;">
-    <button class="icon-btn" id="emojiBtn" onclick="toggleEmojiPicker()">😀</button>
-    <button class="icon-btn" id="attachBtn" onclick="document.getElementById('photoInput').click()">📎</button>
-    <input type="file" id="photoInput" accept="image/*" style="display:none">
-    <emoji-picker id="emojiPicker"></emoji-picker>
-    <input id="message" placeholder="Type a message">
-    <button onclick="send()">Send</button>
-  </div>
-</div>
-
-<!-- ENCRYPTION PANEL -->
-<div class="crypto-panel">
-  <h3>🔐 Encryption Log</h3>
-  <div id="crypto"></div>
 </div>
 
 <!-- Libraries: elliptic.js (ECDH), CryptoJS (AES), Socket.IO -->
@@ -121,6 +204,8 @@ var broadcastHistory = [];
 var replyingTo  = null;
 var selectedPhotoBase64 = null;
 var pendingHistoryData = null;  // buffered history waiting for key exchange
+var lastIvHex   = "";
+var messageMetadata = {};       // UUID -> crypto details cache
 
 // ── ECDH state ──
 var ec = new elliptic.ec('p256');
@@ -135,7 +220,8 @@ var derivedKeys  = {};     // username -> AES key hex (derived via ECDH)
 function $id(id) { return document.getElementById(id); }
 function scrollChat() { var c=$id("chat"); c.scrollTop=c.scrollHeight; }
 function escapeHtml(s) {
-  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;")
+  if (!s) return "";
+  return s.toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
           .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
 }
 
@@ -176,6 +262,8 @@ function getOrDeriveKey(username) {
 function encryptMsg(plaintext, aesKeyHex) {
   var key = CryptoJS.enc.Hex.parse(aesKeyHex);
   var iv  = CryptoJS.lib.WordArray.random(16);
+  lastIvHex = iv.toString(CryptoJS.enc.Hex);
+  updateTelemetryHud();
   var enc = CryptoJS.AES.encrypt(plaintext, key, {
     iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7
   });
@@ -187,6 +275,8 @@ function decryptMsg(encBase64, aesKeyHex) {
     var key = CryptoJS.enc.Hex.parse(aesKeyHex);
     var raw = CryptoJS.enc.Base64.parse(encBase64);
     var iv  = CryptoJS.lib.WordArray.create(raw.words.slice(0,4), 16);
+    lastIvHex = iv.toString(CryptoJS.enc.Hex);
+    updateTelemetryHud();
     var ct  = CryptoJS.lib.WordArray.create(raw.words.slice(4), raw.sigBytes-16);
     var dec = CryptoJS.AES.decrypt({ciphertext:ct}, key, {
       iv:iv, mode:CryptoJS.mode.CBC, padding:CryptoJS.pad.Pkcs7
@@ -265,6 +355,7 @@ function closeChat() {
   $id("chat").innerHTML=""; $id("crypto").innerHTML="";
   $id("chatTitle").innerText="Select a user";
   $id("chatInput").style.display="none";
+  $id("telemetryHud").style.display="none";
   $id("typingIndicator").classList.remove('visible');
   $id("scrollFab").classList.remove('visible');
   document.body.classList.remove("mobile-chat-active");
@@ -272,6 +363,7 @@ function closeChat() {
   clearPhotoPreview();
   var picker = $id("emojiPicker");
   if (picker) picker.style.display = "none";
+  $id("handshakeScanner").style.display = "none";
 }
 
 function setReply(from, text) {
@@ -344,19 +436,22 @@ function renderUsers() {
   bc.innerHTML='🌐 Broadcast Channel '+(bcCnt?'<span class="badge">'+bcCnt+'</span>':'');
   bc.onclick=function(){
     currentUser="__broadcast__"; unread["__broadcast__"]=0;
-    $id("chatTitle").innerText="🌐 Broadcast Channel";
-    $id("chat").innerHTML=""; $id("crypto").innerHTML="";
-    $id("chatInput").style.display="flex";
-    $id("typingIndicator").classList.remove('visible');
-    document.body.classList.add("mobile-chat-active");
-    history.pushState({chat: true}, '');
-    // Fetch all online users' public keys for broadcast encryption
-    socket.emit('get_online_keys');
-    renderUsers();
-    for (var i=0; i<broadcastHistory.length; i++) {
-      showMsg(broadcastHistory[i]); showCrypto(broadcastHistory[i]);
-    }
-    scrollChat();
+    runHandshakeAnimation("Broadcast Channel", function() {
+      $id("chatTitle").innerText="🌐 Broadcast Channel";
+      $id("chat").innerHTML=""; $id("crypto").innerHTML="";
+      $id("chatInput").style.display="flex";
+      $id("telemetryHud").style.display="flex";
+      $id("typingIndicator").classList.remove('visible');
+      document.body.classList.add("mobile-chat-active");
+      history.pushState({chat: true}, '');
+      socket.emit('get_online_keys');
+      renderUsers();
+      updateTelemetryHud();
+      for (var i=0; i<broadcastHistory.length; i++) {
+        showMsg(broadcastHistory[i]); showCrypto(broadcastHistory[i]);
+      }
+      scrollChat();
+    });
   };
   div.appendChild(bc);
 
@@ -371,15 +466,19 @@ function renderUsers() {
     el.innerHTML='🟢 '+escapeHtml(u)+' '+(cnt?'<span class="badge">'+cnt+'</span>':'');
     el.onclick=function(){
       currentUser=u; unread[u]=0;
-      $id("chatTitle").innerText="Chat with "+u;
-      $id("chat").innerHTML=""; $id("crypto").innerHTML="";
-      $id("chatInput").style.display="flex";
-      document.body.classList.add("mobile-chat-active");
-      history.pushState({chat: true}, '');
-      renderUsers();
-      // Request peer's public key then load history
-      socket.emit('get_public_key', {username: u});
-      socket.emit('load_history', {with: u});
+      runHandshakeAnimation(u, function() {
+        $id("chatTitle").innerText="Chat with "+u;
+        $id("chat").innerHTML=""; $id("crypto").innerHTML="";
+        $id("chatInput").style.display="flex";
+        $id("telemetryHud").style.display="flex";
+        document.body.classList.add("mobile-chat-active");
+        history.pushState({chat: true}, '');
+        renderUsers();
+        updateTelemetryHud();
+        // Request peer's public key then load history
+        socket.emit('get_public_key', {username: u});
+        socket.emit('load_history', {with: u});
+      });
     };
     div.appendChild(el);
   });
@@ -399,6 +498,7 @@ socket.on('public_key', function(data) {
     derivedKeys[data.username] = null; // force re-derive
     var k = getOrDeriveKey(data.username);
     console.log("[E2EE] Derived shared key with", data.username, k?"OK":"FAIL");
+    updateTelemetryHud();
     // Process any pending history that was waiting for this key
     if (pendingHistoryData && pendingHistoryData.user === data.username && currentUser === data.username) {
       processHistoryMessages(pendingHistoryData.msgs);
@@ -414,6 +514,7 @@ socket.on('online_keys', function(keys) {
     getOrDeriveKey(user);
   }
   console.log("[E2EE] Derived broadcast keys for", Object.keys(keys).length, "users");
+  updateTelemetryHud();
 });
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -467,7 +568,7 @@ function processHistoryMessages(msgs) {
     } catch(e) {}
 
     var integrity = sha256(decryptedRaw)===msg.hash;
-    showMsg({from:msg.from, to:msg.to, time:msg.time, decrypted:actualText, replyTo:replyData, photo:photoData, integrity:integrity}, staggerIdx * 40);
+    showMsg({from:msg.from, to:msg.to, time:msg.time, decrypted:actualText, replyTo:replyData, photo:photoData, integrity:integrity, encrypted:msg.encrypted, hash:msg.hash}, staggerIdx * 40);
     showCrypto(msg);
     staggerIdx++;
   }
@@ -573,7 +674,7 @@ function handleReceive(data) {
   } catch(e) {}
 
   var integrity = sha256(decryptedRaw)===data.hash;
-  var full = {from:data.from, to:data.to, time:data.time, encrypted:data.encrypted, decrypted:actualText, replyTo:replyData, photo:photoData, integrity:integrity};
+  var full = {from:data.from, to:data.to, time:data.time, encrypted:data.encrypted, decrypted:actualText, replyTo:replyData, photo:photoData, integrity:integrity, hash:data.hash};
   var isMine = data.from===myUsername;
   var isForMe = data.to===myUsername;
   if (!isMine && !isForMe) return;
@@ -649,7 +750,7 @@ function handleGroupReceive(data, retryCount) {
   } catch(e) {}
 
   var integrity = sha256(decryptedRaw)===data.hash;
-  var full = {from:data.from, to:'__broadcast__', time:data.time, encrypted:data.encrypted, decrypted:actualText, replyTo:replyData, photo:photoData, integrity:integrity, group:true};
+  var full = {from:data.from, to:'__broadcast__', time:data.time, encrypted:data.encrypted, decrypted:actualText, replyTo:replyData, photo:photoData, integrity:integrity, group:true, hash:data.hash};
 
   broadcastHistory.push(full);
 
@@ -683,6 +784,17 @@ function getUserColor(username) {
 }
 
 function showMsg(data, staggerDelay) {
+  // Generate unique ID for this message instance
+  var msgId = "msg-" + Math.random().toString(36).substr(2, 9);
+  messageMetadata[msgId] = {
+    from: data.from,
+    to: data.to || (data.group ? "BROADCAST" : "UNKNOWN"),
+    encrypted: data.encrypted || "N/A (Group ephemeral key wrapped)",
+    decrypted: data.decrypted,
+    hash: data.hash || "N/A",
+    integrity: data.integrity
+  };
+
   var div=document.createElement("div");
   div.className="message "+(data.from===myUsername?"sent":"received");
   
@@ -719,9 +831,10 @@ function showMsg(data, staggerDelay) {
   }
   
   html+='<div class="time">'+data.time+'</div>';
-  html+=(data.integrity
-    ?'<div style="color:#4ade80;font-size:11px;">✔ Verified</div>'
-    :'<div style="color:#f87171;font-size:11px;">⚠ Tampered</div>');
+
+  var integrityClass = data.integrity ? "verified" : "tampered";
+  var integrityLabel = data.integrity ? "✔ Verified" : "⚠ Tampered";
+  html += '<div class="integrity-tag ' + integrityClass + '" onclick="inspectMessage(\'' + msgId + '\')">' + integrityLabel + '</div>';
   
   div.innerHTML=html;
 
@@ -739,6 +852,86 @@ function showCrypto(data) {
   var target=data.group?'🌐 Broadcast':escapeHtml(data.to);
   div.innerHTML='<b>'+escapeHtml(data.from)+' → '+target+'</b><br>🔒 '+escapeHtml(data.encrypted);
   $id("crypto").prepend(div);
+}
+
+function updateTelemetryHud() {
+  if (!currentUser) {
+    $id("telemetryHud").style.display = "none";
+    return;
+  }
+  $id("telemetryHud").style.display = "flex";
+  $id("hudTargetNode").innerText = currentUser === "__broadcast__" ? "BROADCAST" : currentUser;
+  
+  if (currentUser === "__broadcast__") {
+    $id("hudPeerKey").innerText = Object.keys(peerKeys).length + " PEER(S)";
+    $id("hudSharedSecret").innerText = "EPHEMERAL MULTI-WRAP";
+  } else {
+    var pk = peerKeys[currentUser];
+    $id("hudPeerKey").innerText = pk ? pk.substring(0, 16) + "..." : "NONE";
+    var sk = derivedKeys[currentUser];
+    $id("hudSharedSecret").innerText = sk ? sk.substring(0, 16) + "..." : "NONE";
+  }
+  $id("hudLastIv").innerText = lastIvHex ? lastIvHex.substring(0, 16) + "..." : "NONE";
+}
+
+function inspectMessage(msgId) {
+  var meta = messageMetadata[msgId];
+  if (!meta) return;
+  
+  $id("inspectSender").innerText = meta.from;
+  $id("inspectReceiver").innerText = meta.to;
+  $id("inspectCiphertext").innerText = meta.encrypted;
+  $id("inspectPlaintext").innerText = meta.decrypted;
+  $id("inspectHash").innerText = meta.hash;
+  
+  var statusEl = $id("inspectStatus");
+  if (meta.integrity) {
+    statusEl.innerText = "VERIFIED (SHA-256 payload integrity matches)";
+    statusEl.style.color = "var(--neon-green)";
+  } else {
+    statusEl.innerText = "WARNING (Payload compromised or signature tampered!)";
+    statusEl.style.color = "var(--neon-red)";
+  }
+  
+  $id("cryptoInspectorModal").style.display = "flex";
+}
+
+function closeCryptoInspector() {
+  $id("cryptoInspectorModal").style.display = "none";
+}
+
+function runHandshakeAnimation(targetName, callback) {
+  var scanner = $id("handshakeScanner");
+  var telemetry = $id("scannerTelemetry");
+  scanner.style.display = "flex";
+  scanner.style.opacity = "1";
+  
+  var steps = [
+    "REQUESTING IDENTITY KEY MATRIX...",
+    "VERIFYING P-256 CURVE PARAMETERS...",
+    "ESTABLISHING CRYPTOGRAPHIC HANDSHAKE...",
+    "DERIVING INTEGRITY VERIFICATION BLOCKS...",
+    "TUNNEL SECURED AND ESTABLISHED!"
+  ];
+  var stepIdx = 0;
+  
+  var interval = setInterval(function() {
+    if (stepIdx < steps.length) {
+      var hex = Array.from({length: 4}, () => Math.floor(Math.random()*256).toString(16).padStart(2, '0')).join('').toUpperCase();
+      telemetry.innerHTML = steps[stepIdx] + "<br><span style='color:var(--accent-purple);font-size:10px;'>MATRIX_TELEM: 0x" + hex + "</span>";
+      stepIdx++;
+    } else {
+      clearInterval(interval);
+      setTimeout(function() {
+        scanner.style.transition = "opacity 0.2s ease";
+        scanner.style.opacity = "0";
+        setTimeout(function() {
+          scanner.style.display = "none";
+          callback();
+        }, 200);
+      }, 150);
+    }
+  }, 80);
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -786,6 +979,14 @@ function toggleEmojiPicker() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  // Boot sequence
+  if (!sessionStorage.getItem('booted')) {
+    runBootSequence();
+  } else {
+    var splash = $id("bootSplash");
+    if (splash) splash.style.display = "none";
+  }
+
   var picker = $id("emojiPicker");
   if (picker) {
     // Intercept pointerdown on the emoji picker to prevent the input field from losing focus.
@@ -889,7 +1090,7 @@ socket.on('disconnect', function() {
   if (loggedIn) {
     var statusEl = $id("status");
     statusEl.innerText = "⚠️ Connection lost! Logging out...";
-    statusEl.style.color = "var(--red)";
+    statusEl.style.color = "var(--neon-red)";
     setTimeout(function() {
       location.reload();
     }, 2000);
@@ -946,6 +1147,7 @@ window.addEventListener('popstate', function(e) {
     $id("chat").innerHTML=""; $id("crypto").innerHTML="";
     $id("chatTitle").innerText="Select a user";
     $id("chatInput").style.display="none";
+    $id("telemetryHud").style.display="none";
     $id("typingIndicator").classList.remove('visible');
     $id("scrollFab").classList.remove('visible');
     document.body.classList.remove("mobile-chat-active");
