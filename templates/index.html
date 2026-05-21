@@ -788,10 +788,29 @@ function toggleEmojiPicker() {
 document.addEventListener('DOMContentLoaded', function() {
   var picker = $id("emojiPicker");
   if (picker) {
+    // Intercept pointerdown on the emoji picker to prevent the input field from losing focus.
+    // This stops the mobile keyboard from hiding/showing, completely eliminating viewport resize jumps.
+    // We bypass this for inputs/textareas so users can still focus and search in the picker.
+    picker.addEventListener('pointerdown', function(event) {
+      var path = event.composedPath();
+      var isInput = path.some(function(el) {
+        return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
+      });
+      if (!isInput) {
+        event.preventDefault();
+      }
+    });
+
     picker.addEventListener('emoji-click', function(event) {
       var msgBox = $id("message");
       msgBox.value += event.detail.unicode;
-      msgBox.focus();
+      
+      // On touch devices, only call focus() if the input was already active.
+      // This respects the user's explicit keyboard dismissal and prevents keyboard forcing.
+      var isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      if (!isTouch || document.activeElement === msgBox) {
+        msgBox.focus();
+      }
     });
   }
 });

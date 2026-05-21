@@ -126,6 +126,7 @@ To elevate the application to production grade, several critical bugs, race cond
 3.  **Strict XSS Protection & Schema Verification for Base64 Images:** Message attachments are now locked down by checking that incoming photo data is a valid base64 payload (`startsWith('data:image/')`) and enforcing `escapeHtml()` sanitation on it before inserting it into the DOM, fully immunizing the application against cross-site scripting (XSS) vectors.
 4.  **Auto-Tearing Connection Recovery:** Socket connections lost due to transient network drops could lead to stale public keys in active client states. The client now detects socket disconnects immediately, prints a clear warning notification, and triggers an automated `location.reload()` after 2 seconds to cleanly cycle keypairs and refresh the active environment.
 5.  **Refined Mobile UI Panel Shifting:** The responsive layout was optimized on mobile breakpoints by replacing sidebar block rendering with modern flex-flows, tuning layout structures, and styling card sizes to ensure a native app feel on modern mobile screens.
+6.  **Emoji Picker Keyboard & Layout Stability (Mobile UI):** Selecting emojis on mobile devices previously triggered focus losses (blurs) and viewport shifts as the virtual keyboard repeatedly closed and reopened. The client now intercepts `pointerdown` events on the picker to call `event.preventDefault()` (bypassing the search bar), keeping the input field and keyboard active. It also restricts custom `focus()` calls on mobile to already-active fields, preventing layout flickering.
 
 ---
 
