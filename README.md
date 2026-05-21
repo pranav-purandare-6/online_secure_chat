@@ -1,143 +1,205 @@
 # 🔐 Secure Chat — True End-to-End Encrypted Messaging (E2EE)
 
-A production-grade, real-time encrypted chat application built for the **Cryptography and Security Systems** course. It features **True End-to-End Encryption (E2EE)** using Elliptic Curve Diffie-Hellman (ECDH) key exchange and AES-128-CBC encryption. The server acts purely as a zero-knowledge relay and never has access to plaintext messages or encryption keys.
+[![Render Deployment](https://img.shields.io/badge/Deploy-Render.com-46cbf5?style=for-the-badge&logo=render&logoColor=white)](https://render.com)
+[![Flask](https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
+[![Socket.IO](https://img.shields.io/badge/Socket.io-010101?style=for-the-badge&logo=socket.io&logoColor=white)](https://socket.io/)
+[![Cryptography](https://img.shields.io/badge/Cryptography-ECDH%20%26%20AES-22c55e?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API)
+
+A production-grade, highly secure, real-time web chat application featuring **True End-to-End Encryption (E2EE)**. Designed with a gorgeous, responsive, glassmorphic dark interface, it demonstrates state-of-the-art cryptographic concepts like **Elliptic Curve Diffie-Hellman (ECDH)** key exchanges, **AES-128-CBC** message encryption, and **ephemeral key wrapping** for broadcast groups. The backend operates on a strict **zero-knowledge principle**—serving only as an encrypted relay and public key repository. It never has access to plaintext conversations, images, or shared keys.
 
 ---
 
 ## 📋 Table of Contents
 
-- [Features](#-features)
-- [Technology Stack](#-technology-stack)
-- [Project Architecture (E2EE)](#-project-architecture-e2ee)
-- [Cryptographic Concepts Demonstrated](#-cryptographic-concepts-demonstrated)
-- [How to Run (Local & Deployment)](#-how-to-run-local--deployment)
-- [File Structure](#-file-structure)
+- [✨ Premium Features](#-premium-features)
+- [🛠️ Technology Stack](#%EF%B8%8F-technology-stack)
+- [🏗️ Architectural Flow (E2EE & Zero-Knowledge)](#%EF%B8%8F-architectural-flow-e2ee--zero-knowledge)
+- [🔒 Cryptographic Implementation Details](#-cryptographic-implementation-details)
+- [🛠️ Recent Architecture & Stability Improvements](#%EF%B8%8F-recent-architecture--stability-improvements)
+- [🚀 Local Setup & Deployment Guide](#-local-setup--deployment-guide)
+- [☁️ Deploying on Render.com (Global Chat Guide)](#%EF%B8%8F-deploying-on-rendercom-global-chat-guide)
+- [📁 File Structure](#-file-structure)
 
 ---
 
-## ✨ Features
+## ✨ Premium Features
 
-- **True E2EE (End-to-End Encryption)** — encryption and decryption happen strictly in the browser.
-- **Zero-Knowledge Server** — the backend server never sees your messages or encryption keys.
-- **ECDH Key Exchange** — automatic secure generation of shared secrets between users.
-- **Broadcast E2EE (Group Chat)** — secure group messaging using ephemeral wrapped AES keys.
-- **SQLite Database** — persistent storage for users, passwords (hashed), and public keys.
-- **Ephemeral Chat History** — messages exist only in server memory and are wiped when you disconnect.
-- **SHA-256 Integrity Verification** — detects message tampering.
-- **Production Ready** — uses `eventlet` async workers, ready for deployment on platforms like Render.
-- **Encryption Log Panel** — view the raw encrypted payloads flying across the network.
+### 🔐 Cryptographic Integrity
+*   **True E2EE Direct Messaging:** Key exchange, shared secret generation, and AES encryption/decryption happen exclusively in the browser. 
+*   **Zero-Knowledge Backend:** The server only relays binary/base64 ciphertexts and password hashes.
+*   **Secure Broadcast Channel:** Message keys are dynamically wrapped for all active users using individual ECDH secrets.
+*   **SHA-256 Tamper Detection:** Automatic integrity verification showing `✔ Verified` or `⚠ Tampered` based on cryptographic hash validation.
 
----
+### 🎨 Stunning Modern UI & UX
+*   **Dynamic Responsive Layout:** Smooth slide-out mobile mechanics using CSS transforms and stateful hardware back-button history navigation.
+*   **Visual Micro-Animations:** Mouse-move radial card glows, active indicator transitions, status shakes, badge expansions, and button click ripple effects.
+*   **Real-time Typing Indicators:** Smooth, bounce-animated typing feedback for direct chats.
+*   **In-App Cryptographic Log Panel:** A real-time transparent log displaying outgoing and incoming encrypted payloads, offering full transparency.
 
-## 🛠 Technology Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **Backend Framework** | Python 3, Flask, Flask-SocketIO |
-| **Backend Async/Server** | `eventlet`, `gunicorn` |
-| **Database** | SQLite3 (`sqlite3` module) |
-| **Frontend** | HTML5, CSS3, Vanilla JavaScript |
-| **Encryption (Client)** | `elliptic.js` (ECDH), CryptoJS 4.2.0 (AES-128-CBC, SHA-256) |
-| **Authentication (Server)** | PyCryptodome (SHA-256 for passwords) |
+### 🖼️ Enhanced Media & Input Systems
+*   **Hardware Image Compression:** Files uploaded via chat are compressed and scaled client-side using an HTML5 Canvas downsampler before E2EE encryption, preventing payload congestion and maximizing speed.
+*   **Full Emoji Integration:** Fully integrated native emoji picker with click-away dismissal.
+*   **Dynamic Reply Quotes:** Message threading allows quoting and replying to messages, with active author indicator coloring.
 
 ---
 
-## 🏗 Project Architecture (E2EE)
+## 🛠️ Technology Stack
 
-The application follows a strictly client-side cryptographic architecture. The server is completely blind to the contents of the conversations.
+| Component | Stack Selection | Purpose |
+|---|---|---|
+| **Backend Framework** | Python 3, Flask, Flask-SocketIO | Robust routing, request lifecycle, and WebSocket events |
+| **Backend Workers** | `gevent`, `gevent-websocket` | High-concurrency asynchronous event loop handling |
+| **Production Server** | `gunicorn` | Production-grade WSGI/WebSocket container |
+| **Database ORM** | SQLAlchemy (SQLite / PostgreSQL) | Thread-safe active records for credentials and keys |
+| **Client-Side Crypto** | `elliptic.js` (P-256), CryptoJS | Fast Elliptic-Curve math and cryptographic ciphers |
+| **Server-Side Crypto** | PyCryptodome (SHA-256) | Zero-knowledge password verification |
+| **Interface Styling** | CSS3 (Variable tokens, HSL palettes) | Immersive glassmorphic dark theme and responsive panels |
+
+---
+
+## 🏗️ Architectural Flow (E2EE & Zero-Knowledge)
+
+The system enforces a client-side sandbox model where cryptographic boundaries are never crossed by the server.
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                   ZERO-KNOWLEDGE SERVER (Flask)                     │
-│                                                                     │
-│  • Stores User Passwords (Hashed)                                   │
-│  • Stores ECDH Public Keys                                          │
-│  • Relays Encrypted Payloads (Ciphertext only)                      │
-│  • Maintains Session-Scoped Ephemeral Chat History                  │
-│                                                                     │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │ WebSocket (Socket.IO)
-              ┌────────────┴────────────┐
-              │                         │
-    ┌─────────▼─────────┐    ┌─────────▼─────────┐
-    │   PC 1 (Alice)    │    │    PC 2 (Bob)     │
-    │                   │    │                   │
-    │ 1. Gen ECDH Keys  │    │ 1. Gen ECDH Keys  │
-    │ 2. Derive Secret  │    │ 2. Derive Secret  │
-    │ 3. AES Encrypt    │    │ 3. AES Decrypt    │
-    │ 4. Send Ciphertext│    │ 4. Read Message   │
-    └───────────────────┘    └───────────────────┘
+                  ┌─────────────────────────────────────────────────────────────┐
+                  │                 ZERO-KNOWLEDGE SERVER (Flask)               │
+                  │                                                             │
+                  │  • Handles User Authentications (SHA-256 password hash DB)  │
+                  │  • Stores & Relays ECDH Public Keys                         │
+                  │  • Relays Encrypted Payloads (Ciphertext only)              │
+                  │  • Manages Ephemeral, Session-Scoped Chat History           │
+                  └──────────────────────────────┬──────────────────────────────┘
+                                                 │
+                                                 │ Secure WebSockets (Socket.IO)
+                                                 │
+                             ┌───────────────────┴───────────────────┐
+                             │                                       │
+                  ┌──────────▼──────────┐                 ┌──────────▼──────────┐
+                  │     Client Alice    │                 │     Client Bob      │
+                  │                     │                 │                     │
+                  │  1. Generates ECDH  │                 │  1. Generates ECDH  │
+                  │     Keypair (P-256) │                 │     Keypair (P-256) │
+                  │  2. Requests Bob's  │                 │  2. Requests Alice's│
+                  │     Public Key      │                 │     Public Key      │
+                  │  3. Derives AES Key │                 │  3. Derives AES Key │
+                  │  4. Encrypts Msg    │                 │  4. Decrypts Msg    │
+                  │  5. Transmits raw   │                 │  5. Performs        │
+                  │     Ciphertext      │                 │     Integrity Check │
+                  └─────────────────────┘                 └─────────────────────┘
 ```
 
-### Direct Message Flow (ECDH + AES)
-1. **Login:** Alice logs in. Her browser generates an ECDH keypair and sends the Public Key to the server.
-2. **Key Exchange:** When Alice wants to talk to Bob, her browser requests Bob's Public Key from the server.
-3. **Derive Secret:** Alice's browser combines her Private Key with Bob's Public Key to calculate a Shared Secret. The shared secret is hashed to generate an AES-128 key.
-4. **Encrypt:** The message is encrypted locally using AES-128-CBC.
-5. **Transmit:** Only the **ciphertext** and an **integrity hash** are sent to the server.
-6. **Decrypt:** Bob receives the ciphertext, derives the exact same shared AES key using his Private Key and Alice's Public Key, and decrypts the message.
+---
 
-### Broadcast Message Flow (Wrapped Keys)
-To send a message to the "Broadcast Channel" (all online users):
-1. The sender generates a random **ephemeral AES key**.
-2. The message is encrypted with this ephemeral key.
-3. The sender gets the public keys of *every online user*.
-4. The sender uses ECDH to encrypt (wrap) the ephemeral key individually for every recipient.
-5. The payload contains the encrypted message and a dictionary of wrapped keys. Each user unwraps the key meant for them and decrypts the message.
+## 🔒 Cryptographic Implementation Details
+
+### 1. Key Derivation via ECDH (P-256)
+Upon secure login, the client browser creates an ephemeral Elliptic Curve keypair based on the **NIST P-256 (secp256r1)** curve using `elliptic.js`:
+*   The **Private Key** is kept strictly inside client-side JS memory.
+*   The **Public Key** (in Hex format) is transmitted to the server's database via the `store_public_key` socket event.
+*   When Alice selects Bob, their browsers query each other's public keys. They execute:
+    $$\text{Shared Secret} = \text{Alice's Private Key} \times \text{Bob's Public Key}$$
+*   The shared secret is padded, passed through a **SHA-256** hash, and truncated to the first 32 characters (16 bytes / 128 bits) to form a high-entropy **AES-128** encryption key.
+
+### 2. Client-Side AES-128-CBC
+Every message is encrypted locally using the Derived AES Key in **Cipher Block Chaining (CBC)** mode with standard **PKCS7** padding:
+*   A cryptographically secure random **16-byte Initialization Vector (IV)** is generated for *every single message*.
+*   The IV is prepended to the encrypted ciphertext block and encoded as a base64 string before transmission. This ensures that sending the same text multiple times results in completely different ciphertexts.
+
+### 3. Broadcast Ephemeral Key Wrapping
+To send E2EE messages to a broadcast channel containing variable numbers of online users, the sender uses **Key Wrapping**:
+1. The sender generates a random **ephemeral AES-128 key** ($K_{eph}$) specifically for that one message.
+2. The message is encrypted using $K_{eph}$.
+3. For every online participant $U_i$ (including the sender themselves), the sender derives their shared ECDH key ($K_{shared\_i}$) and encrypts the ephemeral key:
+    $$\text{Wrapped Key}_i = \text{Encrypt}_{AES}(K_{eph}, K_{shared\_i})$$
+4. The final payload containing the ciphertext, the message hash, and the map of user-wrapped keys `{"Bob": wrappedKeyB, "Charlie": wrappedKeyC}` is emitted.
+5. Receivers decrypt only the specific wrapped key mapped to their username, retrieve $K_{eph}$, and decrypt the message payload.
 
 ---
 
-## 🔒 Cryptographic Concepts Demonstrated
+## 🛠️ Recent Architecture & Stability Improvements
 
-### 1. Elliptic Curve Diffie-Hellman (ECDH)
-- **Curve:** P-256
-- **Implementation:** `elliptic.js` in the browser
-- **Purpose:** Allows two users to establish a shared secret over an insecure channel without ever transmitting the secret itself.
+To elevate the application to production grade, several critical bugs, race conditions, and vulnerabilities were resolved in the codebase:
 
-### 2. Client-Side AES-128-CBC Encryption
-- **Mode:** Cipher Block Chaining (CBC) with PKCS7 Padding
-- **Initialization Vector (IV):** A random 16-byte IV is generated for *every single message*, ensuring the same text encrypts to different ciphertexts every time.
-- **Execution:** Happens entirely in the browser using `CryptoJS`. The server *never* sees the AES keys.
-
-### 3. Key Wrapping (Group Chat Security)
-- Instead of sharing a single group key (which compromises forward secrecy), broadcast messages use an ephemeral key that is wrapped (encrypted) individually for every recipient using their unique ECDH shared secret. This is standard in modern E2EE apps (like Signal/WhatsApp).
-
-### 4. SHA-256 Integrity & Password Hashing
-- Every encrypted payload includes a SHA-256 hash of the plaintext. The receiver decrypts the text, hashes it, and verifies it matches to prevent MITM tampering.
-- Server-side, user passwords are mathematically one-way hashed with SHA-256 before being stored in SQLite.
+1.  **Resolved Public Key Race Condition (Server & Client):** Previously, the server broadcasted a user's online status as soon as their socket authenticated, *before* writing their new ECDH public key to the database. This caused immediate key derivation errors for other clients. The server now defers `broadcast_users()` until the public key has been successfully written to the database.
+2.  **3-Pass Broadcast Decryption Buffer (Client-Side):** Broadcast messages received from newly joined users occasionally failed to decrypt because their public keys were still transitively fetching. The client now uses a robust `handleGroupReceive` function with a **3-pass retry queue** spaced at `500ms` intervals, letting asynchronous key exchanges settle cleanly before giving up.
+3.  **Strict XSS Protection & Schema Verification for Base64 Images:** Message attachments are now locked down by checking that incoming photo data is a valid base64 payload (`startsWith('data:image/')`) and enforcing `escapeHtml()` sanitation on it before inserting it into the DOM, fully immunizing the application against cross-site scripting (XSS) vectors.
+4.  **Auto-Tearing Connection Recovery:** Socket connections lost due to transient network drops could lead to stale public keys in active client states. The client now detects socket disconnects immediately, prints a clear warning notification, and triggers an automated `location.reload()` after 2 seconds to cleanly cycle keypairs and refresh the active environment.
+5.  **Refined Mobile UI Panel Shifting:** The responsive layout was optimized on mobile breakpoints by replacing sidebar block rendering with modern flex-flows, tuning layout structures, and styling card sizes to ensure a native app feel on modern mobile screens.
 
 ---
 
-## 🚀 How to Run (Local & Deployment)
+## 🚀 Local Setup & Deployment Guide
 
 ### Running Locally
 
-**Prerequisites:** Python 3.8+
+Ensure you have **Python 3.8+** installed.
 
-1. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. Start the server:
-   ```bash
-   python server.py
-   ```
-3. Open `http://127.0.0.1:5000` in your browser.
-4. To chat between multiple PCs, look at the terminal output for the `Network` URL (e.g., `http://192.168.x.x:5000`) and open that on a second PC connected to the same Wi-Fi.
+1.  **Clone or navigate** into the project workspace directory.
+2.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+3.  **Launch the application:**
+    ```bash
+    python server.py
+    ```
+4.  **Access the client:**
+    *   **Local Access:** Open `http://127.0.0.1:5000` on your machine.
+    *   **Local Network Access:** Check the startup banner in the console for your LAN IP (e.g., `http://192.168.1.15:5000`). Other devices (laptops, phones) connected to the same Wi-Fi network can visit this URL to test multi-device chat.
 
-### Deploying to Render.com
+---
 
-This project is fully configured for production deployment on Render.
+## ☁️ Deploying on Render.com (Global Chat Guide)
 
-1. Push this folder to a GitHub repository.
-2. Go to [Render.com](https://render.com) and create a **New Web Service**.
-3. Connect your GitHub repository.
-4. Set the configurations:
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `gunicorn --worker-class eventlet -w 1 server:app`
-5. Go to Advanced Settings -> Environment Variables and add:
-   - Key: `PYTHONUNBUFFERED` | Value: `1`
-6. Click **Create Web Service**. 
+This application is fully compatible with [Render.com](https://render.com) and is optimized to run smoothly on their free hosting platform.
+
+### Step-by-Step Render Deployment
+
+1.  Push your code to a personal repository on **GitHub** or **GitLab**.
+2.  Log in to the [Render Dashboard](https://dashboard.render.com/) and click **New > Web Service**.
+3.  Connect your repository.
+4.  Configure the environment settings:
+    *   **Name:** `secure-chat` (or any preferred name)
+    *   **Runtime:** `Python 3`
+    *   **Region:** Select the closest region to you and your friends.
+    *   **Branch:** `main`
+    *   **Build Command:** `pip install -r requirements.txt`
+    *   **Start Command:** `gunicorn -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 server:app`
+5.  Under **Advanced Settings**, add the following **Environment Variables**:
+    *   `PYTHONUNBUFFERED` = `1`
+6.  Click **Deploy Web Service**. Render will build the virtual environment and launch your secure server.
+
+---
+
+### 💡 Crucial Operational Details for Render Hosting
+
+To ensure a seamless experience with your friends around the world, please read the following operational considerations:
+
+> [!NOTE]
+> **Render Free Tier Spin-Down (Cold Starts)**
+> Since this is hosted on Render's free tier, the web container automatically spins down (enters a sleep state) after 15 minutes of inactivity. When you or a friend first visit your deployment URL, the page may take **50 to 90 seconds** to load as Render boots the container up. Once awake, the application operates instantly and seamlessly.
+
+> [!IMPORTANT]
+> **Database Persistence: Ephemeral SQLite vs. Permanent PostgreSQL**
+> By default, the application runs on a local SQLite database (`secure_chat.db`). However, **Render's free tier containers have an ephemeral filesystem**. Every time the service spins down due to inactivity or restarts during a redeploy, your SQLite file is deleted—meaning **all registered user accounts and public keys will be completely wiped!**
+> 
+> **The Solution:** Link a free **Render PostgreSQL Database** to your web service:
+> 1. In Render, click **New > PostgreSQL** and create a free database.
+> 2. Once provisioned, copy the **Internal Database URL**.
+> 3. Go to your Secure Chat Web Service **Environment Variables** and add:
+>    *   **Key:** `DATABASE_URL` | **Value:** *[Paste your copied PostgreSQL URL]*
+> 4. Save changes. The app's `database.py` will automatically detect the variable, convert the `postgres://` dialect to `postgresql://`, and connect using SQLAlchemy. **Your user accounts and public keys will now be permanently persisted across all restarts!**
+
+> [!TIP]
+> **Why Chat History is Ephemeral (Perfect Forward Secrecy by Design)**
+> You may notice that refreshing the browser page or losing connection wipes out your chat history. **This is a security feature, not a bug!** 
+> 1. plain text messages are *never* stored on the server's hard drive—they only exist as encrypted payloads inside the server's volatile RAM (`chat_history` dictionary).
+> 2. When a user disconnects or refreshes the page, the server calls `clear_user_history(username)`, instantly erasing all session history involving that user from memory.
+> 3. Because cryptographic keypairs are generated in-memory on login and are never saved to disk, refreshing the page generates a brand new keypair, rendering older encrypted session history unreadable. This guarantees **Perfect Forward Secrecy**!
+
+### 🌍 Chatting Worldwide
+Yes! Because the server is hosted publicly on HTTPS with full WebSocket support, **you can chat with friends anywhere in the world**! Simply share your public Render URL (e.g., `https://your-app-name.onrender.com`). As long as you are logged in at the same time, you can register accounts, establish ECDH key exchanges, and enjoy secure, end-to-end encrypted chats globally!
 
 ---
 
@@ -145,15 +207,14 @@ This project is fully configured for production deployment on Render.
 
 ```
 secure-chat/
-├── server.py          # Pure relay server (zero-knowledge)
-├── crypto.py          # Server-side hashing (passwords only)
-├── database.py        # SQLite database logic and in-memory history
-├── secure_chat.db     # Auto-generated SQLite database (Users & Public Keys)
-├── Procfile           # Render deployment configuration
-├── requirements.txt   # Python dependencies (Flask, eventlet, gunicorn)
+├── server.py              # Zero-knowledge message router and WebSocket handler
+├── crypto.py              # Server-side cryptographic functions (password hashing only)
+├── database.py            # SQLAlchemy config (dynamic SQLite/Postgre support & volatile memory logs)
+├── Procfile               # Production startup instructions for Gunicorn + Gevent
+├── requirements.txt       # Python dependencies (Flask, Flask-SocketIO, gevent-websocket, SQLAlchemy, etc.)
 ├── templates/
-│   └── index.html     # Client UI and full ECDH/AES client-side cryptography
+│   └── index.html         # Rich UI templates, Canvas compression, and ECDH/AES client engine
 ├── static/
-│   └── style.css      # Dark theme UI styling
-└── README.md          # This file
+│   └── style.css          # Premium glassmorphic stylesheets and responsive layouts
+└── README.md              # Documentation and Operational Guide (this file)
 ```

@@ -214,7 +214,7 @@ function showRegister() {
   setTimeout(function() {
     login.style.display='none';
     login.classList.remove('form-slide-out');
-    reg.style.display='block';
+    reg.style.display='flex';
     reg.classList.add('form-slide-in');
     setTimeout(function(){ reg.classList.remove('form-slide-in'); }, 300);
   }, 250);
@@ -227,7 +227,7 @@ function showLogin() {
   setTimeout(function() {
     reg.style.display='none';
     reg.classList.remove('form-slide-out');
-    login.style.display='block';
+    login.style.display='flex';
     login.classList.add('form-slide-in');
     setTimeout(function(){ login.classList.remove('form-slide-in'); }, 300);
   }, 250);
@@ -326,7 +326,13 @@ socket.on('auth', function(data) {
 // ══════════════════════════════════════════════════════════════════════════
 //  USERS LIST
 // ══════════════════════════════════════════════════════════════════════════
-socket.on('users', function(users) { usersList=users; renderUsers(); });
+socket.on('users', function(users) {
+  usersList = users;
+  renderUsers();
+  if (loggedIn) {
+    socket.emit('get_online_keys');
+  }
+});
 
 function renderUsers() {
   var div=$id("users"); div.innerHTML="";
@@ -589,6 +595,11 @@ function handleReceive(data) {
 // ══════════════════════════════════════════════════════════════════════════
 socket.on('group_receive', function(data) {
   if (!myUsername) return;
+  handleGroupReceive(data);
+});
+
+function handleGroupReceive(data, retryCount) {
+  retryCount = retryCount || 0;
   if (!data.encrypted || !data.wrappedKeys) return;
 
   var ephemeralKey = null;
@@ -600,7 +611,19 @@ socket.on('group_receive', function(data) {
   } else {
     // Recipient: unwrap with shared ECDH key
     var sharedKey = getOrDeriveKey(data.from);
-    if (sharedKey && data.wrappedKeys[myUsername]) {
+    if (!sharedKey) {
+      if (retryCount < 3) {
+        // Request key and retry
+        peerKeys[data.from] = null;
+        socket.emit('get_public_key', {username: data.from});
+        console.log("[E2EE] Broadcast waiting for key from", data.from, "retry:", retryCount + 1);
+        setTimeout(function(){ handleGroupReceive(data, retryCount + 1); }, 500);
+      } else {
+        console.error("[E2EE] Cannot unwrap broadcast key: key exchange failed after retries");
+      }
+      return;
+    }
+    if (data.wrappedKeys[myUsername]) {
       ephemeralKey = decryptMsg(data.wrappedKeys[myUsername], sharedKey);
     }
   }
@@ -635,7 +658,7 @@ socket.on('group_receive', function(data) {
   } else {
     unread["__broadcast__"]=(unread["__broadcast__"]||0)+1; renderUsers();
   }
-});
+}
 
 // ══════════════════════════════════════════════════════════════════════════
 //  TYPING
@@ -687,8 +710,9 @@ function showMsg(data, staggerDelay) {
     html+='<div class="group-sender-name" style="color:#22c55e">You</div>';
   }
   
-  if (data.photo) {
-    html += '<img src="' + data.photo + '" class="message-photo" onclick="window.open(this.src, \'_blank\')">';
+  if (data.photo && typeof data.photo === 'string' && data.photo.startsWith('data:image/')) {
+    var safePhoto = escapeHtml(data.photo);
+    html += '<img src="' + safePhoto + '" class="message-photo" onclick="window.open(this.src, \'_blank\')">';
   }
   if (data.decrypted) {
     html+=escapeHtml(data.decrypted);
@@ -843,7 +867,14 @@ socket.on('connect', function() {
   setTimeout(function(){ bar.classList.remove('connected'); }, 1500);
 });
 socket.on('disconnect', function() {
-  if (loggedIn) $id("status").innerText="\u26A0 Disconnected...";
+  if (loggedIn) {
+    var statusEl = $id("status");
+    statusEl.innerText = "⚠️ Connection lost! Logging out...";
+    statusEl.style.color = "var(--red)";
+    setTimeout(function() {
+      location.reload();
+    }, 2000);
+  }
 });
 
 // ══════════════════════════════════════════════════════════════════════════

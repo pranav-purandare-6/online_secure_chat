@@ -66,7 +66,6 @@ def handle_login(data):
         user_sids[username] = request.sid
         active_users[username] = request.sid
         emit('auth', {'msg': f'✅ Welcome {username}', 'username': username})
-        broadcast_users()
         print(f"[{get_ist_time().strftime('%H:%M:%S')}] {username} logged in")
     else:
         emit('auth', {'msg': '❌ Invalid credentials'})
@@ -81,6 +80,7 @@ def handle_store_public_key(data):
     if public_key:
         store_public_key(username, public_key)
         print(f"[{get_ist_time().strftime('%H:%M:%S')}] Stored ECDH public key for {username}")
+        broadcast_users()
 
 # ===== GET PUBLIC KEY =====
 @socketio.on('get_public_key')
