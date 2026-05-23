@@ -100,13 +100,12 @@
       <button class="close-btn" onclick="closeChat()">❌ TERMINATE</button>
     </div>
 
-    <!-- REAL-TIME CRYPTOGRAPHIC TELEMETRY HUD -->
+    <!-- REAL-TIME SECURE STATUS HUD -->
     <div class="crypto-telemetry-hud" id="telemetryHud" style="display:none;">
-      <div class="hud-stat"><strong>TARGET NODE:</strong> <span class="hud-stat-value" id="hudTargetNode">-</span></div>
-      <div class="hud-stat"><strong>CURVE:</strong> <span class="hud-stat-value">secp256r1</span></div>
-      <div class="hud-stat"><strong>PEER KEY:</strong> <span class="hud-stat-value" id="hudPeerKey">-</span></div>
-      <div class="hud-stat"><strong>SHARED SECRET:</strong> <span class="hud-stat-value" id="hudSharedSecret">-</span></div>
-      <div class="hud-stat"><strong>LAST IV:</strong> <span class="hud-stat-value" id="hudLastIv">-</span></div>
+      <div class="hud-stat"><strong>👤 TARGET:</strong> <span class="hud-stat-value" id="hudTarget">-</span></div>
+      <div class="hud-stat"><strong>🔒 E2EE:</strong> <span class="hud-stat-value" id="hudE2ee">-</span></div>
+      <div class="hud-stat"><strong>🛡 TUNNEL:</strong> <span class="hud-stat-value" id="hudTunnel">-</span></div>
+      <div class="hud-stat"><strong>📡 MODE:</strong> <span class="hud-stat-value" id="hudMode">-</span></div>
     </div>
 
     <div class="chat-box" id="chat"></div>
@@ -137,7 +136,8 @@
       <button class="icon-btn" id="attachBtn" onclick="document.getElementById('photoInput').click()">📎</button>
       <input type="file" id="photoInput" accept="image/*" style="display:none">
       <emoji-picker id="emojiPicker"></emoji-picker>
-      <input id="message" placeholder="Type a message">
+      <textarea id="message" placeholder="Type a message" rows="1" autocomplete="off"></textarea>
+      <span id="bufBadge" class="buf-badge">[BUF: 0 B]</span>
       <button onclick="send()">Send</button>
     </div>
   </div>
@@ -203,8 +203,8 @@ var broadcastHistory = [];
 var replyingTo  = null;
 var selectedPhotoBase64 = null;
 var pendingHistoryData = null;  // buffered history waiting for key exchange
-var lastIvHex   = "";
 var messageMetadata = {};       // UUID -> crypto details cache
+var completedHandshakes = {};    // track handshake animations run during session
 
 // ── ECDH state ──
 var ec = new elliptic.ec('p256');
@@ -261,8 +261,6 @@ function getOrDeriveKey(username) {
 function encryptMsg(plaintext, aesKeyHex) {
   var key = CryptoJS.enc.Hex.parse(aesKeyHex);
   var iv  = CryptoJS.lib.WordArray.random(16);
-  lastIvHex = iv.toString(CryptoJS.enc.Hex);
-  updateTelemetryHud();
   var enc = CryptoJS.AES.encrypt(plaintext, key, {
     iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7
   });
@@ -274,8 +272,6 @@ function decryptMsg(encBase64, aesKeyHex) {
     var key = CryptoJS.enc.Hex.parse(aesKeyHex);
     var raw = CryptoJS.enc.Base64.parse(encBase64);
     var iv  = CryptoJS.lib.WordArray.create(raw.words.slice(0,4), 16);
-    lastIvHex = iv.toString(CryptoJS.enc.Hex);
-    updateTelemetryHud();
     var ct  = CryptoJS.lib.WordArray.create(raw.words.slice(4), raw.sigBytes-16);
     var dec = CryptoJS.AES.decrypt({ciphertext:ct}, key, {
       iv:iv, mode:CryptoJS.mode.CBC, padding:CryptoJS.pad.Pkcs7
@@ -363,6 +359,13 @@ function closeChat() {
   var picker = $id("emojiPicker");
   if (picker) picker.style.display = "none";
   $id("handshakeScanner").style.display = "none";
+  
+  var box = $id("message");
+  if (box) {
+    box.value = "";
+    autoGrow(box);
+    updateBufBadge("");
+  }
 }
 
 function setReply(from, text) {
@@ -599,7 +602,10 @@ function send() {
     var msgHash = sha256(plaintextToEncrypt);
     socket.emit('send_message', {to:currentUser, encrypted:encrypted, hash:msgHash});
   }
-  box.value=""; box.focus();
+  box.value="";
+  autoGrow(box);
+  updateBufBadge("");
+  box.focus();
   // Send button animation
   var sendBtn = $id('chatInput').querySelector('button:last-child');
   if (sendBtn) { sendBtn.classList.add('send-btn-animate'); setTimeout(function(){ sendBtn.classList.remove('send-btn-animate'); }, 300); }
@@ -859,18 +865,18 @@ function updateTelemetryHud() {
     return;
   }
   $id("telemetryHud").style.display = "flex";
-  $id("hudTargetNode").innerText = currentUser === "__broadcast__" ? "BROADCAST" : currentUser;
-  
-  if (currentUser === "__broadcast__") {
-    $id("hudPeerKey").innerText = Object.keys(peerKeys).length + " PEER(S)";
-    $id("hudSharedSecret").innerText = "EPHEMERAL MULTI-WRAP";
+
+  var isBroadcast = currentUser === "__broadcast__";
+  $id("hudTarget").innerText = isBroadcast ? "BROADCAST" : currentUser;
+  $id("hudE2ee").innerText = "ACTIVE";
+  $id("hudMode").innerText = isBroadcast ? "GROUP" : "PRIVATE CHAT";
+
+  if (isBroadcast) {
+    $id("hudTunnel").innerText = "MULTI-WRAP";
   } else {
-    var pk = peerKeys[currentUser];
-    $id("hudPeerKey").innerText = pk ? pk.substring(0, 16) + "..." : "NONE";
-    var sk = derivedKeys[currentUser];
-    $id("hudSharedSecret").innerText = sk ? sk.substring(0, 16) + "..." : "NONE";
+    var tunnelOk = peerKeys[currentUser] && derivedKeys[currentUser];
+    $id("hudTunnel").innerText = tunnelOk ? "ESTABLISHED" : "KEY EXCHANGE";
   }
-  $id("hudLastIv").innerText = lastIvHex ? lastIvHex.substring(0, 16) + "..." : "NONE";
 }
 
 function inspectMessage(msgId) {
@@ -900,6 +906,12 @@ function closeCryptoInspector() {
 }
 
 function runHandshakeAnimation(targetName, callback) {
+  if (completedHandshakes[targetName]) {
+    callback();
+    return;
+  }
+  completedHandshakes[targetName] = true;
+
   var scanner = $id("handshakeScanner");
   var telemetry = $id("scannerTelemetry");
   scanner.style.display = "flex";
@@ -933,11 +945,46 @@ function runHandshakeAnimation(targetName, callback) {
   }, 80);
 }
 
+function autoGrow(textarea) {
+  if (!textarea) return;
+  textarea.style.height = 'auto';
+  var newHeight = textarea.scrollHeight;
+  var maxHeight = 120;
+  if (newHeight > maxHeight) {
+    textarea.style.height = maxHeight + 'px';
+    textarea.style.overflowY = 'auto';
+  } else {
+    textarea.style.height = Math.max(42, newHeight) + 'px';
+    textarea.style.overflowY = 'hidden';
+  }
+}
+
+function updateBufBadge(val) {
+  var bytes = val ? new TextEncoder().encode(val).length : 0;
+  var badge = $id("bufBadge");
+  if (badge) {
+    badge.innerText = "[BUF: " + bytes + " B]";
+    if (bytes > 0) {
+      badge.classList.add("active");
+    } else {
+      badge.classList.remove("active");
+    }
+  }
+}
+
 // ══════════════════════════════════════════════════════════════════════════
 //  KEYBOARD
 // ══════════════════════════════════════════════════════════════════════════
 $id("message").addEventListener("keydown", function(e){
-  if (e.key==="Enter"){e.preventDefault();send();}
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  } else if (e.key === "Enter" && e.shiftKey) {
+    var self = this;
+    setTimeout(function() {
+      autoGrow(self);
+    }, 0);
+  }
 });
 document.addEventListener("keydown", function(e){
   if (e.key==="Escape") closeChat();
@@ -945,6 +992,8 @@ document.addEventListener("keydown", function(e){
 $id("message").addEventListener("input", function(e){
   var v=e.target.value;
   if (v.length>0) e.target.value=v.charAt(0).toUpperCase()+v.slice(1);
+  autoGrow(this);
+  updateBufBadge(e.target.value);
   if (currentUser && currentUser!=="__broadcast__") socket.emit('typing',{to:currentUser});
 });
 $id("loginPassword").addEventListener("keydown", function(e){
@@ -1052,6 +1101,8 @@ document.addEventListener('DOMContentLoaded', function() {
     picker.addEventListener('emoji-click', function(event) {
       var msgBox = $id("message");
       msgBox.value += event.detail.unicode;
+      autoGrow(msgBox);
+      updateBufBadge(msgBox.value);
       
       // On touch devices, only call focus() if the input was already active.
       // This respects the user's explicit keyboard dismissal and prevents keyboard forcing.
@@ -1188,20 +1239,7 @@ document.addEventListener('mousemove', function(e) {
 // ══════════════════════════════════════════════════════════════════════════
 window.addEventListener('popstate', function(e) {
   if (document.body.classList.contains('mobile-chat-active')) {
-    // Close chat without pushing/popping history again
-    currentUser="";
-    pendingHistoryData = null;
-    $id("chat").innerHTML=""; $id("crypto").innerHTML="";
-    $id("chatTitle").innerText="Select a user";
-    $id("chatInput").style.display="none";
-    $id("telemetryHud").style.display="none";
-    $id("typingIndicator").classList.remove('visible');
-    $id("scrollFab").classList.remove('visible');
-    document.body.classList.remove("mobile-chat-active");
-    cancelReply();
-    clearPhotoPreview();
-    var picker = $id("emojiPicker");
-    if (picker) picker.style.display = "none";
+    closeChat();
   }
 });
 
